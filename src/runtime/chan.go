@@ -29,21 +29,20 @@ const (
 	debugChan = false
 )
 
-/**
-*环形链表结构
-**/
-
+/*
+ *环形链表结构
+ */
 type hchan struct {
 	qcount   uint           //缓冲槽有效数据项数量
 	dataqsiz uint           //缓冲槽大小(可存储数据项数量)
 	buf      unsafe.Pointer //缓冲槽指针
 	elemsize uint16         //数据项大小
 	closed   uint32         //是否关闭
-	elemtype *_type         // 数据项类型
-	sendx    uint           // 缓冲槽发送位置索引
-	recvx    uint           // 缓冲槽接收位置索引
+	elemtype *_type         //数据项类型
+	sendx    uint           //缓冲槽发送位置索引
+	recvx    uint           //缓冲槽接收位置索引
 	recvq    waitq          //接收的等待队列
-	sendq    waitq          // 发送的等待队列
+	sendq    waitq          //发送的等待队列
 
 	// lock protects all fields in hchan, as well as several
 	// fields in sudogs blocked on this channel.
@@ -143,6 +142,7 @@ func chansend1(c *hchan, elem unsafe.Pointer) {
  *当 channel 缓存队列( hchan.buf )有剩余空间时，将数据放到队列里，等待接收，接收后总共产生两次复制
  *当 channel 缓存队列( hchan.buf )已满时，将当前 goroutine 加入 send 队列并阻塞。
  */
+//参数eq是数据项指针
 func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 	if c == nil {
 		if !block {
@@ -211,7 +211,9 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 			raceacquire(qp)
 			racerelease(qp)
 		}
+		//将数据复制到缓存槽
 		typedmemmove(c.elemtype, qp, ep)
+		//调整缓存槽队列索引和数据项计数
 		c.sendx++
 		if c.sendx == c.dataqsiz {
 			c.sendx = 0
@@ -253,6 +255,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 	// stack tracer.
 	KeepAlive(ep)
 
+	//被唤醒从这里开始继续执行
 	// someone woke us up.
 	if mysg != gp.waiting {
 		throw("G waiting list is corrupted")
@@ -309,6 +312,7 @@ func send(c *hchan, sg *sudog, ep unsafe.Pointer, unlockf func(), skip int) {
 	if sg.releasetime != 0 {
 		sg.releasetime = cputicks()
 	}
+	//这个是重点，不管是发送还是接收都有唤醒另一方的责任
 	goready(gp, skip+1)
 }
 
@@ -366,6 +370,7 @@ func closechan(c *hchan) {
 	var glist gList
 
 	// release all readers
+	//释放所有接收者
 	for {
 		sg := c.recvq.dequeue()
 		if sg == nil {
@@ -387,6 +392,7 @@ func closechan(c *hchan) {
 	}
 
 	// release all writers (they will panic)
+	//释放所有发送者
 	for {
 		sg := c.sendq.dequeue()
 		if sg == nil {
@@ -558,7 +564,9 @@ func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool)
 	c.recvq.enqueue(mysg)
 	goparkunlock(&c.lock, waitReasonChanReceive, traceEvGoBlockRecv, 3)
 
+
 	// someone woke us up
+	//被唤醒从这里开始继续执行
 	if mysg != gp.waiting {
 		throw("G waiting list is corrupted")
 	}

@@ -559,7 +559,7 @@ type p struct {
 		n int32
 	}
 
-	sudogcache []*sudog
+	sudogcache []*sudog    //本地缓存
 	sudogbuf   [128]*sudog
 
 	tracebuf traceBufPtr
@@ -651,7 +651,7 @@ type schedt struct {
 
 	// Central cache of sudog structs.
 	sudoglock  mutex
-	sudogcache *sudog
+	sudogcache *sudog  //全局缓存,也可以成为中央缓存
 
 	// Central pool of available defer structs of different sizes.
 	deferlock mutex

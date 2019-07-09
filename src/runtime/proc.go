@@ -333,9 +333,11 @@ func acquireSudog() *sudog {
 	// which keeps the garbage collector from being invoked.
 	mp := acquirem()
 	pp := mp.p.ptr()
+	//如果本地缓存为空
 	if len(pp.sudogcache) == 0 {
 		lock(&sched.sudoglock)
 		// First, try to grab a batch from central cache.
+		//从全局缓存转移一批到本地缓存 这个写法可以学习
 		for len(pp.sudogcache) < cap(pp.sudogcache)/2 && sched.sudogcache != nil {
 			s := sched.sudogcache
 			sched.sudogcache = s.next
@@ -344,10 +346,12 @@ func acquireSudog() *sudog {
 		}
 		unlock(&sched.sudoglock)
 		// If the central cache is empty, allocate a new one.
+		//如果失败,则新建一个新的
 		if len(pp.sudogcache) == 0 {
 			pp.sudogcache = append(pp.sudogcache, new(sudog))
 		}
 	}
+	//从尾部提取,并调整本地缓存
 	n := len(pp.sudogcache)
 	s := pp.sudogcache[n-1]
 	pp.sudogcache[n-1] = nil
@@ -385,8 +389,10 @@ func releaseSudog(s *sudog) {
 	}
 	mp := acquirem() // avoid rescheduling to another P
 	pp := mp.p.ptr()
+	//如果本地缓存已满
 	if len(pp.sudogcache) == cap(pp.sudogcache) {
 		// Transfer half of local cache to the central cache.
+		//转移一半的本地缓存到全局缓存
 		var first, last *sudog
 		for len(pp.sudogcache) > cap(pp.sudogcache)/2 {
 			n := len(pp.sudogcache)
@@ -401,6 +407,7 @@ func releaseSudog(s *sudog) {
 			last = p
 		}
 		lock(&sched.sudoglock)
+		//将提取的链表挂到全局
 		last.next = sched.sudogcache
 		sched.sudogcache = first
 		unlock(&sched.sudoglock)
