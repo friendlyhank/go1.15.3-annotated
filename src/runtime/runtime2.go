@@ -451,7 +451,7 @@ type g struct {
 }
 
 type m struct {
-	g0      *g     // goroutine with scheduling stack
+	g0      *g     //提供系统栈空间 goroutine with scheduling stack
 	morebuf gobuf  // gobuf arg to morestack
 	divmod  uint32 // div/mod denominator for arm - known to liblink
 
@@ -461,11 +461,11 @@ type m struct {
 	goSigStack    gsignalStack // Go-allocated signal handling stack
 	sigmask       sigset       // storage for saved signal mask
 	tls           [6]uintptr   // thread-local storage (for x86 extern register)
-	mstartfn      func()
-	curg          *g       // current running goroutine
+	mstartfn      func()	//启动函数
+	curg          *g       //当前运行G current running goroutine
 	caughtsig     guintptr // goroutine running during fatal signal
-	p             puintptr // attached p for executing go code (nil if not executing go code)
-	nextp         puintptr
+	p             puintptr //绑定P attached p for executing go code (nil if not executing go code)
+	nextp         puintptr //临时存放P
 	oldp          puintptr // the p that was attached before executing a syscall
 	id            int64
 	mallocing     int32
@@ -474,7 +474,7 @@ type m struct {
 	locks         int32
 	dying         int32
 	profilehz     int32
-	spinning      bool // m is out of work and is actively looking for work
+	spinning      bool //自旋状态 m is out of work and is actively looking for work
 	blocked       bool // m is blocked on a note
 	newSigstack   bool // minit on C thread called sigaltstack
 	printlock     int8
@@ -487,9 +487,9 @@ type m struct {
 	ncgo          int32       // number of cgo calls currently in progress
 	cgoCallersUse uint32      // if non-zero, cgoCallers in use temporarily
 	cgoCallers    *cgoCallers // cgo traceback if crashing in cgo call
-	park          note
+	park          note	//休眠锁
 	alllink       *m // on allm
-	schedlink     muintptr
+	schedlink     muintptr	//链表
 	mcache        *mcache
 	lockedg       guintptr
 	createstack   [32]uintptr // stack that created this thread.
@@ -612,11 +612,11 @@ type schedt struct {
 	// When increasing nmidle, nmidlelocked, nmsys, or nmfreed, be
 	// sure to call checkdead().
 
-	midle        muintptr // idle m's waiting for work
-	nmidle       int32    // number of idle m's waiting for work
+	midle        muintptr //限制M链表 idle m's waiting for work
+	nmidle       int32    //限制M数量 number of idle m's waiting for work
 	nmidlelocked int32    // number of locked m's waiting for work
 	mnext        int64    // number of m's that have been created and next M ID
-	maxmcount    int32    // maximum number of m's allowed (or die)
+	maxmcount    int32    //M最大闲置 maximum number of m's allowed (or die)
 	nmsys        int32    // number of system m's not counted for deadlock
 	nmfreed      int64    // cumulative number of freed m's
 

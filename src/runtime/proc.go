@@ -1171,15 +1171,18 @@ func startTheWorldWithSema(emitTraceEvent bool) int64 {
 func mstart() {
 	_g_ := getg()
 
+	//确定栈边界
 	osStack := _g_.stack.lo == 0
 	if osStack {
 		// Initialize stack bounds from system stack.
 		// Cgo may have left stack size in stack.hi.
 		// minit may update the stack bounds.
+		//对于无法使用g0 stack的系统,直接在系统堆栈上划出所需空间
 		size := _g_.stack.hi
 		if size == 0 {
 			size = 8192 * sys.StackGuardMultiplier
 		}
+		//通过size变量指针来确定高位地址
 		_g_.stack.hi = uintptr(noescape(unsafe.Pointer(&size)))
 		_g_.stack.lo = _g_.stack.hi - size + 1024
 	}
@@ -1221,15 +1224,17 @@ func mstart1() {
 	if _g_.m == &m0 {
 		mstartm0()
 	}
-
+	//执行启动函数
 	if fn := _g_.m.mstartfn; fn != nil {
 		fn()
 	}
 
 	if _g_.m != &m0 {
+		//绑定p
 		acquirep(_g_.m.nextp.ptr())
 		_g_.m.nextp = 0
 	}
+	//进入任务调度循环(不再返回)
 	schedule()
 }
 
@@ -1510,8 +1515,8 @@ func allocm(_p_ *p, fn func()) *m {
 	}
 
 	mp := new(m)
-	mp.mstartfn = fn
-	mcommoninit(mp)
+	mp.mstartfn = fn //启动函数
+	mcommoninit(mp)  //初始化
 
 	// In case of cgo or Solaris or illumos or Darwin, pthread_create will make us a stack.
 	// Windows and Plan 9 will layout sched stack on OS stack.
@@ -1825,8 +1830,11 @@ var newmHandoff struct {
 // fn needs to be static and not a heap allocated closure.
 // May run with m.p==nil, so write barriers are not allowed.
 //go:nowritebarrierrec
+//创建一个new m
 func newm(fn func(), _p_ *p) {
+	//创建M对象
 	mp := allocm(_p_, fn)
+	//暂存P
 	mp.nextp.set(_p_)
 	mp.sigmask = initSigmask
 	if gp := getg(); gp != nil && gp.m != nil && (gp.m.lockedExt != 0 || gp.m.incgo) && GOOS != "plan9" {
@@ -1875,6 +1883,7 @@ func newm1(mp *m) {
 		return
 	}
 	execLock.rlock() // Prevent process clone.
+	//创建系统线程
 	newosproc(mp)
 	execLock.runlock()
 }
@@ -1934,6 +1943,7 @@ func templateThread() {
 
 // Stops execution of the current m until new work is available.
 // Returns with acquired P.
+//停止M,使其休眠。
 func stopm() {
 	_g_ := getg()
 
@@ -1948,10 +1958,13 @@ func stopm() {
 	}
 
 	lock(&sched.lock)
+	//放回休闲队列
 	mput(_g_.m)
 	unlock(&sched.lock)
+	//休眠，等待被唤醒
 	notesleep(&_g_.m.park)
 	noteclear(&_g_.m.park)
+	//绑定p
 	acquirep(_g_.m.nextp.ptr())
 	_g_.m.nextp = 0
 }
@@ -2194,6 +2207,7 @@ func execute(gp *g, inheritTime bool) {
 
 // Finds a runnable goroutine to execute.
 // Tries to steal from other P's, get g from global queue, poll network.
+//找到可以运行的g并去执行
 func findrunnable() (gp *g, inheritTime bool) {
 	_g_ := getg()
 
@@ -2220,11 +2234,13 @@ top:
 	}
 
 	// local runq
+	//先从本地队列去取G
 	if gp, inheritTime := runqget(_p_); gp != nil {
 		return gp, inheritTime
 	}
 
 	// global runq
+	//也可以从全局队列去取
 	if sched.runqsize != 0 {
 		lock(&sched.lock)
 		gp := globrunqget(_p_, 0)
@@ -2504,6 +2520,7 @@ func schedule() {
 	}
 
 top:
+	//准备进入 GC STW,休眠
 	if sched.gcwaiting != 0 {
 		gcstopm()
 		goto top
@@ -2513,6 +2530,8 @@ top:
 	}
 
 	var gp *g
+	//当从P.next提取G时,inheritTime = true
+	//不累加 P.shedtick计数，使得它延长本地队列处理时间
 	var inheritTime bool
 
 	// Normal goroutines will check for need to wakeP in ready,
@@ -2531,6 +2550,7 @@ top:
 		gp = gcController.findRunnableGCWorker(_g_.m.p.ptr())
 		tryWakeP = tryWakeP || gp != nil
 	}
+	//每处理m个任务后就去全局队列获取G任务，以确保公平
 	if gp == nil {
 		// Check the global runnable queue once in a while to ensure fairness.
 		// Otherwise two goroutines can completely occupy the local runqueue
@@ -2541,12 +2561,15 @@ top:
 			unlock(&sched.lock)
 		}
 	}
+	//从P本地队列获取G任务
 	if gp == nil {
 		gp, inheritTime = runqget(_g_.m.p.ptr())
 		if gp != nil && _g_.m.spinning {
 			throw("schedule: spinning with local work")
 		}
 	}
+	//从其他可能的地方获取G任务
+	//如果获取失败，会让M进入休眠状态，被唤醒后重试
 	if gp == nil {
 		gp, inheritTime = findrunnable() // blocks until work is available
 	}
@@ -2588,7 +2611,7 @@ top:
 		startlockedm(gp)
 		goto top
 	}
-
+	//执行goroutine 任务函数
 	execute(gp, inheritTime)
 }
 
@@ -4178,6 +4201,7 @@ func procresize(nprocs int32) *p {
 // isn't because it immediately acquires _p_.
 //
 //go:yeswritebarrierrec
+//当前m绑定p
 func acquirep(_p_ *p) {
 	// Do the part that isn't allowed to have write barriers.
 	wirep(_p_)
@@ -4213,6 +4237,7 @@ func wirep(_p_ *p) {
 		print("wirep: p->m=", _p_.m, "(", id, ") p->status=", _p_.status, "\n")
 		throw("wirep: invalid p state")
 	}
+	//绑定mcache P为M提供mcache,以便为执行绪提供对象内存分配
 	_g_.m.mcache = _p_.mcache
 	_g_.m.p.set(_p_)
 	_p_.m.set(_g_.m)
@@ -4695,6 +4720,7 @@ func schedEnabled(gp *g) bool {
 // Sched must be locked.
 // May run during STW, so write barriers are not allowed.
 //go:nowritebarrierrec
+//将m放入空闲队列
 func mput(mp *m) {
 	mp.schedlink = sched.midle
 	sched.midle.set(mp)
@@ -4706,6 +4732,7 @@ func mput(mp *m) {
 // Sched must be locked.
 // May run during STW, so write barriers are not allowed.
 //go:nowritebarrierrec
+//从空闲链表获取M
 func mget() *m {
 	mp := sched.midle.ptr()
 	if mp != nil {
@@ -4744,6 +4771,7 @@ func globrunqputbatch(batch *gQueue, n int32) {
 
 // Try get a batch of G's from the global runnable queue.
 // Sched must be locked.
+//从全局队列中获取一个g
 func globrunqget(_p_ *p, max int32) *g {
 	if sched.runqsize == 0 {
 		return nil
@@ -4926,6 +4954,7 @@ func runqputslow(_p_ *p, gp *g, h, t uint32) bool {
 // If inheritTime is true, gp should inherit the remaining time in the
 // current time slice. Otherwise, it should start a new time slice.
 // Executed only by the owner P.
+//从本地队列获取g
 func runqget(_p_ *p) (gp *g, inheritTime bool) {
 	// If there's a runnext, it's the next G to run.
 	for {
