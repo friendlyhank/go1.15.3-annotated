@@ -31,6 +31,7 @@ func GOMAXPROCS(n int) int {
 	// newprocs will be processed by startTheWorld
 	newprocs = int32(n)
 
+	//调用procresize,并激活有任务的P
 	startTheWorld()
 	return ret
 }

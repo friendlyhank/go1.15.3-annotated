@@ -322,6 +322,7 @@ func goready(gp *g, traceskip int) {
 }
 
 //go:nosplit
+//获得一个sudog
 func acquireSudog() *sudog {
 	// Delicate dance: the semaphore implementation calls
 	// acquireSudog, acquireSudog calls new(sudog),
@@ -552,11 +553,11 @@ func schedinit() {
 	tracebackinit()
 	moduledataverify()
 
-	//内存相关初始化
+	//初始化栈空间复用管理列表
 	stackinit()
 	mallocinit()
 
-	//M 相关初始化
+	//初始化当前m
 	mcommoninit(_g_.m)
 	cpuinit()       // must run before alginit
 	alginit()       // maps must not be used before this call
@@ -576,11 +577,13 @@ func schedinit() {
 
 	sched.lastpoll = uint64(nanotime())
 
-	//设置 GOMAXPROCS
+	//默认值总算从1调整为CPU Corn数量了
 	procs := ncpu
 	if n, ok := atoi32(gogetenv("GOMAXPROCS")); ok && n > 0 {
 		procs = n
 	}
+	//调整P的数量
+	//注意:此刻所有P都是新建，所以不可能返回本地任务的P
 	if procresize(procs) != nil {
 		throw("unknown runnable goroutine during bootstrap")
 	}
@@ -3952,8 +3955,10 @@ func (pp *p) init(id int32) {
 // transitions it to status _Pdead.
 //
 // sched.lock must be held and the world must be stopped.
+//P的销毁
 func (pp *p) destroy() {
 	// Move all runnable goroutines to the global queue
+	//将本地任务转移到全局队列
 	for pp.runqhead != pp.runqtail {
 		// Pop from tail of local queue
 		pp.runqtail--
@@ -3992,8 +3997,10 @@ func (pp *p) destroy() {
 		}
 		pp.deferpool[i] = pp.deferpoolbuf[i][:0]
 	}
+	//释放当前P绑定的缓存
 	freemcache(pp.mcache)
 	pp.mcache = nil
+	//将当前P的G的复用链转移到全局
 	gfpurge(pp)
 	traceProcFree(pp)
 	if raceenabled {
@@ -4001,6 +4008,7 @@ func (pp *p) destroy() {
 		pp.raceprocctx = 0
 	}
 	pp.gcAssistTime = 0
+	//似乎就丢在那不管了,反正也没剩下啥
 	pp.status = _Pdead
 }
 
@@ -4008,6 +4016,7 @@ func (pp *p) destroy() {
 // gcworkbufs are not being modified by either the GC or
 // the write barrier code.
 // Returns list of Ps with local work, they need to be scheduled by the caller.
+//调整P的数量
 func procresize(nprocs int32) *p {
 	old := gomaxprocs
 	if old < 0 || nprocs <= 0 {
@@ -4025,6 +4034,7 @@ func procresize(nprocs int32) *p {
 	sched.procresizetime = now
 
 	// Grow allp if necessary.
+	//必要时做扩容
 	if nprocs > int32(len(allp)) {
 		// Synchronize with retake, which could be running
 		// concurrently since it doesn't run on a P.
@@ -4042,16 +4052,21 @@ func procresize(nprocs int32) *p {
 	}
 
 	// initialize new P's
+	//新增P
 	for i := old; i < nprocs; i++ {
+		//allp定义了足够大的数组存储空间
 		pp := allp[i]
 		if pp == nil {
 			pp = new(p)
 		}
 		pp.init(i)
+		//保存到allp
 		atomicstorep(unsafe.Pointer(&allp[i]), unsafe.Pointer(pp))
 	}
 
 	_g_ := getg()
+	//如果当前正在用的P属于被释放的那拨，那就换成allp[0]
+	//调度器初始化阶段,根本没有P,那就绑定allp[0]
 	if _g_.m.p != 0 && _g_.m.p.ptr().id < nprocs {
 		// continue to use the current P
 		_g_.m.p.ptr().status = _Prunning
@@ -4062,6 +4077,7 @@ func procresize(nprocs int32) *p {
 		// We must do this before destroying our current P
 		// because p.destroy itself has write barriers, so we
 		// need to do that from a valid P.
+		// 释放当前P,因为它已经失效
 		if _g_.m.p != 0 {
 			if trace.enabled {
 				// Pretend that we were descheduled
@@ -4084,6 +4100,7 @@ func procresize(nprocs int32) *p {
 	}
 
 	// release resources from unused P's
+	//释放多余的P
 	for i := nprocs; i < old; i++ {
 		p := allp[i]
 		p.destroy()
@@ -4097,16 +4114,20 @@ func procresize(nprocs int32) *p {
 		unlock(&allpLock)
 	}
 
+	//将没有本地任务的P放到空闲链表
 	var runnablePs *p
 	for i := nprocs - 1; i >= 0; i-- {
 		p := allp[i]
+		//确保不是当前正在用的P
 		if _g_.m.p.ptr() == p {
 			continue
 		}
 		p.status = _Pidle
 		if runqempty(p) {
+			//放入空闲链表
 			pidleput(p)
 		} else {
+			//有本地任务,构建链表
 			p.m.set(mget())
 			p.link.set(runnablePs)
 			runnablePs = p
@@ -4115,6 +4136,8 @@ func procresize(nprocs int32) *p {
 	stealOrder.reset(uint32(nprocs))
 	var int32p *int32 = &gomaxprocs // make compiler check that gomaxprocs is an int32
 	atomic.Store((*uint32)(unsafe.Pointer(int32p)), uint32(nprocs))
+
+	//返回有本地任务的P(链表)
 	return runnablePs
 }
 

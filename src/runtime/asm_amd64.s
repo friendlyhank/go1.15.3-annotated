@@ -211,9 +211,11 @@ ok:
 	MOVQ	AX, 8(SP)
 	CALL	runtime·args(SB)
 	CALL	runtime·osinit(SB)
+	//M的初始化
 	CALL	runtime·schedinit(SB)
 
 	// create a new goroutine to start program
+	//创建main goroutine,并将其放入当前P本地队列
 	MOVQ	$runtime·mainPC(SB), AX		// entry
 	PUSHQ	AX
 	PUSHQ	$0			// arg size
@@ -222,6 +224,7 @@ ok:
 	POPQ	AX
 
 	// start this M
+	//让当前M进入调度,执行main goroutine
 	CALL	runtime·mstart(SB)
 
 	CALL	runtime·abort(SB)	// mstart should never return

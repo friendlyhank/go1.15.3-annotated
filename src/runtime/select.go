@@ -42,6 +42,9 @@ func selectsetpc(cas *scase) {
 	cas.pc = getcallerpc()
 }
 
+//给所有的channel加锁
+//如果和前一 channel地址不同,则加锁
+// lockorder的作用就是避免对同一 channel重复加锁
 func sellock(scases []scase, lockorder []uint16) {
 	var c *hchan
 	for _, o := range lockorder {
@@ -53,6 +56,7 @@ func sellock(scases []scase, lockorder []uint16) {
 	}
 }
 
+//给所有的channel解锁
 func selunlock(scases []scase, lockorder []uint16) {
 	// We must be very careful here to not touch sel after we have unlocked
 	// the last lock, because sel can be freed right after the last unlock.
@@ -67,6 +71,7 @@ func selunlock(scases []scase, lockorder []uint16) {
 		if c == nil {
 			break
 		}
+		//避免重复解锁
 		if i > 0 && c == scases[lockorder[i-1]].c {
 			continue // will unlock it on the next iteration
 		}
@@ -158,6 +163,7 @@ func selectgo(cas0 *scase, order0 *uint16, ncases int) (int, bool) {
 
 	// sort the cases by Hchan address to get the locking order.
 	// simple heap sort, to guarantee n log n time and constant stack footprint.
+	//lockorder: 按channel地址顺序排序
 	for i := 0; i < ncases; i++ {
 		j := i
 		// Start with the pollorder to permute cases on the same channel.
@@ -202,6 +208,7 @@ func selectgo(cas0 *scase, order0 *uint16, ncases int) (int, bool) {
 	}
 
 	// lock all the channels involved in the select
+	//锁定全部channel
 	sellock(scases, lockorder)
 
 	var (
@@ -223,10 +230,11 @@ loop:
 	var cas *scase
 	var recvOK bool
 	for i := 0; i < ncases; i++ {
+		//从乱序的 pollorder中获取,这就是select随机选择的关键
 		casi = int(pollorder[i])
 		cas = &scases[casi]
 		c = cas.c
-
+		//可以看出接收和发送channel也是不同的类型
 		switch cas.kind {
 		case caseNil:
 			continue
@@ -264,6 +272,7 @@ loop:
 		}
 	}
 
+	//如果没有没有准备好的case,尝试执行default
 	if dfl != nil {
 		selunlock(scases, lockorder)
 		casi = dfli
@@ -271,6 +280,9 @@ loop:
 		goto retc
 	}
 
+	//-----------------------------------
+	//2:如果没有任何准备好的case,将当前select G打包成sudog
+	//放到所有channel排队列表,等待唤醒
 	// pass 2 - enqueue on all chans
 	gp = getg()
 	if gp.waiting != nil {
@@ -284,6 +296,8 @@ loop:
 			continue
 		}
 		c = cas.c
+		//打包成sudog
+		//每个case的sudog都不同
 		sg := acquireSudog()
 		sg.g = gp
 		sg.isSelect = true
@@ -296,9 +310,12 @@ loop:
 		}
 		sg.c = c
 		// Construct waiting list in lock order.
+		//全部sudog被放入gp.waiting链表
+		//此链表顺序同pollorder,后面以此识别是哪个case唤醒
 		*nextp = sg
 		nextp = &sg.waitlink
 
+		//根据case类型,决定放入发送或接收者排队列表
 		switch cas.kind {
 		case caseRecv:
 			c.recvq.enqueue(sg)
@@ -309,15 +326,20 @@ loop:
 	}
 
 	// wait for someone to wake us up
+	//休眠select G,直到某个 case channel活动后,从排队列表中将其提取并唤醒
 	gp.param = nil
 	gopark(selparkcommit, nil, waitReasonSelect, traceEvGoBlockSelect, 1)
 
 	sellock(scases, lockorder)
 
+	//被唤醒
 	gp.selectDone = 0
-	sg = (*sudog)(gp.param)
+	sg = (*sudog)(gp.param)//注意唤醒参数，就是待查sudog
 	gp.param = nil
 
+	//-------------------------------------------
+	//3：找出是哪个case唤醒select G。
+	//-------------------------------------------
 	// pass 3 - dequeue from unsuccessful chans
 	// otherwise they stack up on quiet channels
 	// record the successful case, if any.
@@ -344,8 +366,10 @@ loop:
 		if sg == sglist {
 			// sg has already been dequeued by the G that woke us up.
 			casi = int(casei)
+			//匹配
 			cas = k
 		} else {
+			//不匹配,将sudog从channel排队列表移除
 			c = k.c
 			if k.kind == caseSend {
 				c.sendq.dequeueSudoG(sglist)
@@ -353,12 +377,15 @@ loop:
 				c.recvq.dequeueSudoG(sglist)
 			}
 		}
+
+		//利用循环清理掉所有排队sudog
 		sgnext = sglist.waitlink
 		sglist.waitlink = nil
 		releaseSudog(sglist)
 		sglist = sgnext
 	}
 
+	//没找到匹配，可能被意外唤醒,重新开始
 	if cas == nil {
 		// We can wake up with gp.param == nil (so cas == nil)
 		// when a channel involved in the select has been closed.
@@ -397,6 +424,7 @@ loop:
 		}
 	}
 
+	//找到目标,解锁,退出
 	selunlock(scases, lockorder)
 	goto retc
 

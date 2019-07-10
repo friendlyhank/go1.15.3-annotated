@@ -621,8 +621,8 @@ type schedt struct {
 
 	ngsys uint32 // number of system goroutines; updated atomically
 
-	pidle      puintptr // idle p's
-	npidle     uint32
+	pidle      puintptr // idle p's 空闲P链表
+	npidle     uint32   //空闲P数量
 	nmspinning uint32 // See "Worker thread parking/unparking" comment in proc.go.
 
 	// Global runnable queue.
@@ -911,7 +911,7 @@ func (w waitReason) String() string {
 var (
 	allglen    uintptr
 	allm       *m
-	allp       []*p  // len(allp) == gomaxprocs; may change at safe points, otherwise immutable
+	allp       []*p  //定义足够大的数组存储，虽然浪费点空间，但是省去很多内存增减的麻烦 len(allp) == gomaxprocs; may change at safe points, otherwise immutable
 	allpLock   mutex // Protects P-less reads of allp and all writes
 	gomaxprocs int32
 	ncpu       int32
