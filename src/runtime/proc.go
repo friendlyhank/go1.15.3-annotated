@@ -475,6 +475,7 @@ var (
 	allglock mutex
 )
 
+//所有的g都会被allg引用,这是垃圾回收遍历扫描需要，以便获取指针引用，收缩栈空间
 func allgadd(gp *g) {
 	if readgstatus(gp) == _Gidle {
 		throw("allgadd: bad status Gidle")
@@ -2066,8 +2067,10 @@ func handoffp(_p_ *p) {
 
 // Tries to add one more P to execute G's.
 // Called when a G is made runnable (newproc, ready).
+//尝试唤醒M执行任务
 func wakep() {
 	// be conservative about spinning threads
+	//被唤醒的线程需要绑定P,累加自旋计数，避免newproc1唤醒过多线程
 	if !atomic.Cas(&sched.nmspinning, 0, 1) {
 		return
 	}
@@ -3252,6 +3255,8 @@ func syscall_runtime_AfterExec() {
 }
 
 // Allocate a new g, with a stack big enough for stacksize bytes.
+//g对象的创建
+//默认采用2KB栈空间
 func malg(stacksize int32) *g {
 	newg := new(g)
 	if stacksize >= 0 {
@@ -3273,9 +3278,12 @@ func malg(stacksize int32) *g {
 // copied if a stack split occurred.
 //go:nosplit
 func newproc(siz int32, fn *funcval) {
+	//获取第一参数地址
 	argp := add(unsafe.Pointer(&fn), sys.PtrSize)
 	gp := getg()
+	//获取调用方PC/IP寄存器值
 	pc := getcallerpc()
+	//用g0栈创建 G/goroutine对象
 	systemstack(func() {
 		newproc1(fn, (*uint8)(argp), siz, gp, pc)
 	})
@@ -3284,6 +3292,7 @@ func newproc(siz int32, fn *funcval) {
 // Create a new g running fn with narg bytes of arguments starting
 // at argp. callerpc is the address of the go statement that created
 // this. The new g is put on the queue of g's waiting to run.
+//newproc会为newproc1准备的相关参数值
 func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintptr) {
 	_g_ := getg()
 
@@ -3302,22 +3311,26 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 	if siz >= _StackMin-4*sys.RegSize-sys.RegSize {
 		throw("newproc: function arguments too large for new goroutine")
 	}
-
+	//从当前P复用链表获取空闲G对象
 	_p_ := _g_.m.p.ptr()
 	newg := gfget(_p_)
+
+	//获取失败,新建
 	if newg == nil {
 		newg = malg(_StackMin)
 		casgstatus(newg, _Gidle, _Gdead)
 		allgadd(newg) // publishes with a g->status of Gdead so GC scanner doesn't look at uninitialized stack.
 	}
+	//测试G stack
 	if newg.stack.hi == 0 {
 		throw("newproc1: newg missing stack")
 	}
 
+	//测试G status
 	if readgstatus(newg) != _Gdead {
 		throw("newproc1: new g is not Gdead")
 	}
-
+	//计算所需空间大小,并对齐
 	totalSize := 4*sys.RegSize + uintptr(siz) + sys.MinFrameSize // extra space in case of reads slightly beyond frame
 	totalSize += -totalSize & (sys.SpAlign - 1)                  // align to spAlign
 	sp := newg.stack.hi - totalSize
@@ -3329,6 +3342,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 		spArg += sys.MinFrameSize
 	}
 	if narg > 0 {
+		//将执行参数拷贝入栈
 		memmove(unsafe.Pointer(spArg), unsafe.Pointer(argp), uintptr(narg))
 		// This is a stack-to-stack copy. If write barriers
 		// are enabled and the source stack is grey (the
@@ -3346,13 +3360,14 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 			}
 		}
 	}
-
+	//初始化用于保存执行现场的区域
 	memclrNoHeapPointers(unsafe.Pointer(&newg.sched), unsafe.Sizeof(newg.sched))
 	newg.sched.sp = sp
 	newg.stktopsp = sp
 	newg.sched.pc = funcPC(goexit) + sys.PCQuantum // +PCQuantum so that previous instruction is in same function
 	newg.sched.g = guintptr(unsafe.Pointer(newg))
 	gostartcallfn(&newg.sched, fn)
+	//初始化基本状态
 	newg.gopc = callerpc
 	newg.ancestors = saveAncestors(callergp)
 	newg.startpc = fn.fn
@@ -3364,7 +3379,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 	}
 	newg.gcscanvalid = false
 	casgstatus(newg, _Gdead, _Grunnable)
-
+	//设置唯一id。
 	if _p_.goidcache == _p_.goidcacheend {
 		// Sched.goidgen is the last allocated id,
 		// this batch must be [sched.goidgen+1, sched.goidgen+GoidCacheBatch].
@@ -3381,8 +3396,12 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 	if trace.enabled {
 		traceGoCreate(newg, newg.startpc)
 	}
+	//将G放入待运行的队列
 	runqput(_p_, newg, true)
 
+	//如果有其他空闲的P,则尝试唤醒某个M出来执行任务
+	//如果有M除于自旋等待P或G状态,放弃。
+	//如果当前创建的是 main goroutine(runtime.main),那么还没有其他任务要执行,放弃
 	if atomic.Load(&sched.npidle) != 0 && atomic.Load(&sched.nmspinning) == 0 && mainStarted {
 		wakep()
 	}
@@ -3439,11 +3458,13 @@ func gfput(_p_ *p, gp *g) {
 		gp.stack.hi = 0
 		gp.stackguard0 = 0
 	}
-
+	//放回P本地复用链表
 	_p_.gFree.push(gp)
 	_p_.gFree.n++
+	//如果本地复用对象太多，则转移一批到全局链表
 	if _p_.gFree.n >= 64 {
 		lock(&sched.gFree.lock)
+		//本地仅保留32个
 		for _p_.gFree.n >= 32 {
 			_p_.gFree.n--
 			gp = _p_.gFree.pop()
@@ -3460,11 +3481,14 @@ func gfput(_p_ *p, gp *g) {
 
 // Get from gfree list.
 // If local list is empty, grab a batch from global list.
+//从本地空闲列表中获取一个g,如果没有，则从全局链表空闲队列中转移一批
 func gfget(_p_ *p) *g {
 retry:
 	if _p_.gFree.empty() && (!sched.gFree.stack.empty() || !sched.gFree.noStack.empty()) {
 		lock(&sched.gFree.lock)
 		// Move a batch of free Gs to the P.
+		//如果提取失败,尝试从全局链表空闲列表中转移一批到P本地
+		//最多转移32个
 		for _p_.gFree.n < 32 {
 			// Prefer Gs with stacks.
 			gp := sched.gFree.stack.pop()
@@ -3479,14 +3503,18 @@ retry:
 			_p_.gFree.n++
 		}
 		unlock(&sched.gFree.lock)
+		//再试
 		goto retry
 	}
+	//从P本地队列提取复用对象
 	gp := _p_.gFree.pop()
 	if gp == nil {
 		return nil
 	}
 	_p_.gFree.n--
+	//检查 G stack
 	if gp.stack.lo == 0 {
+		//分配新栈
 		// Stack was deallocated in gfput. Allocate a new one.
 		systemstack(func() {
 			gp.stack = stackalloc(_FixedStack)
@@ -3504,6 +3532,7 @@ retry:
 }
 
 // Purge all cached G's from gfree list to the global list.
+//将P上空闲的g列表放到全局global的gFree上
 func gfpurge(_p_ *p) {
 	lock(&sched.gFree.lock)
 	for !_p_.gFree.empty() {
@@ -3964,8 +3993,10 @@ func (pp *p) destroy() {
 		pp.runqtail--
 		gp := pp.runq[pp.runqtail%uint32(len(pp.runq))].ptr()
 		// Push onto head of global queue
+		//放到全局队列的head
 		globrunqputhead(gp)
 	}
+	//将优先队列的也转移到全局队列
 	if pp.runnext != 0 {
 		globrunqputhead(pp.runnext.ptr())
 		pp.runnext = 0
@@ -4799,11 +4830,14 @@ const randomizeScheduler = raceenabled
 // If next is true, runqput puts g in the _p_.runnext slot.
 // If the run queue is full, runnext puts g on the global queue.
 // Executed only by the owner P.
+//任务队列分为三级，按优先级从高到低分别是P.runnext、P.runq,Sched.runq,有些CPU多级缓存的意思
+//将G任务放入P本地队列等待执行,这属于无锁操作
 func runqput(_p_ *p, gp *g, next bool) {
 	if randomizeScheduler && next && fastrand()%2 == 0 {
 		next = false
 	}
 
+	//如果可能,将G直接保存再P.runnext,作为下一个优先执行任务
 	if next {
 	retryNext:
 		oldnext := _p_.runnext
@@ -4814,17 +4848,23 @@ func runqput(_p_ *p, gp *g, next bool) {
 			return
 		}
 		// Kick the old runnext out to the regular run queue.
+		//原来的 next G 会被放回本地队列
 		gp = oldnext.ptr()
 	}
 
 retry:
+	//runqhead是一个数组实现的循环队列
+	//head、tail累加,通过取模j即可获得索引位置，很典型的算法
 	h := atomic.LoadAcq(&_p_.runqhead) // load-acquire, synchronize with consumers
 	t := _p_.runqtail
+	//如果本地队列未满，直接放到尾部。优先放到本地队列
 	if t-h < uint32(len(_p_.runq)) {
 		_p_.runq[t%uint32(len(_p_.runq))].set(gp)
 		atomic.StoreRel(&_p_.runqtail, t+1) // store-release, makes the item available for consumption
 		return
 	}
+	//放入全局队列。
+	//因为要加锁，所以用slow
 	if runqputslow(_p_, gp, h, t) {
 		return
 	}
@@ -4834,23 +4874,30 @@ retry:
 
 // Put g and a batch of work from local runnable queue on global queue.
 // Executed only by the owner P.
+//将g往P的全局队列添加任务，需要加锁
 func runqputslow(_p_ *p, gp *g, h, t uint32) bool {
+	//这意思显示要从P本地转移一半任务到全局队列
 	var batch [len(_p_.runq)/2 + 1]*g
 
 	// First, grab a batch from local queue.
+	//计算一半的实际数量
 	n := t - h
 	n = n / 2
 	if n != uint32(len(_p_.runq)/2) {
 		throw("runqputslow: queue is not full")
 	}
+	//从队列头部开始取
 	for i := uint32(0); i < n; i++ {
 		batch[i] = _p_.runq[(h+i)%uint32(len(_p_.runq))].ptr()
 	}
+	//调整P头部位置
 	if !atomic.CasRel(&_p_.runqhead, h, h+n) { // cas-release, commits consume
 		return false
 	}
-	batch[n] = gp
 
+	//加上当前gp这家伙
+	batch[n] = gp
+	//对顺序进行洗牌
 	if randomizeScheduler {
 		for i := uint32(1); i <= n; i++ {
 			j := fastrandn(i + 1)
@@ -4859,6 +4906,7 @@ func runqputslow(_p_ *p, gp *g, h, t uint32) bool {
 	}
 
 	// Link the goroutines.
+	//串成链表
 	for i := uint32(0); i < n; i++ {
 		batch[i].schedlink.set(batch[i+1])
 	}
@@ -4867,6 +4915,7 @@ func runqputslow(_p_ *p, gp *g, h, t uint32) bool {
 	q.tail.set(batch[n])
 
 	// Now put the batch on global queue.
+	//添加到全局队列尾部
 	lock(&sched.lock)
 	globrunqputbatch(&q, int32(n+1))
 	unlock(&sched.lock)

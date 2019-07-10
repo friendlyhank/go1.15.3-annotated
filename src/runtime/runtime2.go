@@ -143,6 +143,7 @@ const (
 	// reuse Ps if GOMAXPROCS increases. A dead P is mostly
 	// stripped of its resources, though a few things remain
 	// (e.g., trace buffers).
+	//不再使用的P
 	_Pdead
 )
 
@@ -392,21 +393,21 @@ type g struct {
 	// stackguard1 is the stack pointer compared in the C stack growth prologue.
 	// It is stack.lo+StackGuard on g0 and gsignal stacks.
 	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
-	stack       stack   // offset known to runtime/cgo
+	stack       stack   //执行栈 offset known to runtime/cgo
 	stackguard0 uintptr // offset known to liblink
 	stackguard1 uintptr // offset known to liblink
 
 	_panic         *_panic // innermost panic - offset known to liblink
 	_defer         *_defer // innermost defer
 	m              *m      // current m; offset known to arm liblink
-	sched          gobuf
+	sched          gobuf  //用于保存执行现场
 	syscallsp      uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
 	syscallpc      uintptr        // if status==Gsyscall, syscallpc = sched.pc to use during gc
 	stktopsp       uintptr        // expected sp at top of stack, to check in traceback
 	param          unsafe.Pointer // passed parameter on wakeup
 	atomicstatus   uint32
 	stackLock      uint32 // sigprof/scang lock; TODO: fold in to atomicstatus
-	goid           int64
+	goid           int64  //唯一序号
 	schedlink      guintptr
 	waitsince      int64      // approx time when the g become blocked
 	waitreason     waitReason // if status==Gwaiting
@@ -427,9 +428,9 @@ type g struct {
 	sigcode0       uintptr
 	sigcode1       uintptr
 	sigpc          uintptr
-	gopc           uintptr         // pc of go statement that created this goroutine
+	gopc           uintptr         //调用者 PC/IP pc of go statement that created this goroutine
 	ancestors      *[]ancestorInfo // ancestor information goroutine(s) that created this goroutine (only used if debug.tracebackancestors)
-	startpc        uintptr         // pc of goroutine function
+	startpc        uintptr         //任务函数 pc of goroutine function
 	racectx        uintptr
 	waiting        *sudog         // sudog structures this g is waiting on (that have a valid elem ptr); in lock order
 	cgoCtxt        []uintptr      // cgo traceback context
@@ -522,7 +523,7 @@ type m struct {
 
 type p struct {
 	id          int32
-	status      uint32 // one of pidle/prunning/...
+	status      uint32 //状态设置 one of pidle/prunning/...
 	link        puintptr
 	schedtick   uint32     // incremented on every scheduler call
 	syscalltick uint32     // incremented on every system call
@@ -539,9 +540,9 @@ type p struct {
 	goidcacheend uint64
 
 	// Queue of runnable goroutines. Accessed without lock.
-	runqhead uint32
-	runqtail uint32
-	runq     [256]guintptr
+	runqhead uint32   //runq队列头部
+	runqtail uint32   //runq队列尾部
+	runq     [256]guintptr//本地队列
 	// runnext, if non-nil, is a runnable G that was ready'd by
 	// the current G and should be run next instead of what's in
 	// runq if there's time remaining in the running G's time
@@ -551,7 +552,7 @@ type p struct {
 	// unit and eliminates the (potentially large) scheduling
 	// latency that otherwise arises from adding the ready'd
 	// goroutines to the end of the run queue.
-	runnext guintptr
+	runnext guintptr //优先队列 优先级P.runnext高于P.runq高于Sched.runq
 
 	// Available G's (status == Gdead)
 	gFree struct {
@@ -626,8 +627,8 @@ type schedt struct {
 	nmspinning uint32 // See "Worker thread parking/unparking" comment in proc.go.
 
 	// Global runnable queue.
-	runq     gQueue
-	runqsize int32
+	runq     gQueue  //全局队列
+	runqsize int32   //全局队列大小
 
 	// disable controls selective disabling of the scheduler.
 	//
@@ -911,7 +912,7 @@ func (w waitReason) String() string {
 var (
 	allglen    uintptr
 	allm       *m
-	allp       []*p  //定义足够大的数组存储，虽然浪费点空间，但是省去很多内存增减的麻烦 len(allp) == gomaxprocs; may change at safe points, otherwise immutable
+	allp       []*p  //所有的P 默认是等于P 定义足够大的数组存储，虽然浪费点空间，但是省去很多内存增减的麻烦 len(allp) == gomaxprocs; may change at safe points, otherwise immutable
 	allpLock   mutex // Protects P-less reads of allp and all writes
 	gomaxprocs int32
 	ncpu       int32
