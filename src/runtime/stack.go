@@ -172,6 +172,7 @@ func stacklog2(n uintptr) int {
 // Allocates a stack from the free pool. Must be called with
 // stackpoolmu held.
 func stackpoolalloc(order uint8) gclinkptr {
+	//尝试从全局缓存获取
 	list := &stackpool[order]
 	s := list.first
 	if s == nil {
@@ -248,6 +249,7 @@ func stackpoolfree(x gclinkptr, order uint8) {
 // The pool is required to prevent unlimited growth of per-thread caches.
 //
 //go:systemstack
+//栈的扩容
 func stackcacherefill(c *mcache, order uint8) {
 	if stackDebug >= 1 {
 		print("stackcacherefill order=", order, "\n")
@@ -258,13 +260,16 @@ func stackcacherefill(c *mcache, order uint8) {
 	var list gclinkptr
 	var size uintptr
 	lock(&stackpoolmu)
+	//提取一批复用空间
 	for size < _StackCacheSize/2 {
+		//每次提取一个
 		x := stackpoolalloc(order)
 		x.ptr().next = list
 		list = x
 		size += _FixedStack << order
 	}
 	unlock(&stackpoolmu)
+	//保存到cache.stackcache数组
 	c.stackcache[order].list = list
 	c.stackcache[order].size = size
 }
@@ -342,6 +347,7 @@ func stackalloc(n uint32) stack {
 	// a dedicated span.
 	var v unsafe.Pointer
 	if n < _FixedStack<<_NumStackOrders && n < _StackCacheSize {
+		//计算order等级
 		order := uint8(0)
 		n2 := n
 		for n2 > _FixedStack {
@@ -350,6 +356,7 @@ func stackalloc(n uint32) stack {
 		}
 		var x gclinkptr
 		c := thisg.m.mcache
+		//检查是否从缓存分配
 		if stackNoCache != 0 || c == nil || thisg.m.preemptoff != "" {
 			// c == nil can happen in the guts of exitsyscall or
 			// procresize. Just get a stack from the global pool.
@@ -359,11 +366,14 @@ func stackalloc(n uint32) stack {
 			x = stackpoolalloc(order)
 			unlock(&stackpoolmu)
 		} else {
+			//从对应链表提取复用空间
 			x = c.stackcache[order].list
+			//提取失败，扩容尝试
 			if x.ptr() == nil {
 				stackcacherefill(c, order)
 				x = c.stackcache[order].list
 			}
+			//调整缓存链表
 			c.stackcache[order].list = x.ptr().next
 			c.stackcache[order].size -= uintptr(n)
 		}

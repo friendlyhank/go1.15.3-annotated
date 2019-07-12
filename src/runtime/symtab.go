@@ -574,6 +574,10 @@ func (f funcInfo) _Func() *Func {
 	return (*Func)(unsafe.Pointer(f._func))
 }
 
+type pcvalueCache struct {
+	entries [2][8]pcvalueCacheEnt
+}
+
 func findfunc(pc uintptr) funcInfo {
 	datap := findmoduledatap(pc)
 	if datap == nil {
@@ -612,10 +616,6 @@ func findfunc(pc uintptr) funcInfo {
 		}
 	}
 	return funcInfo{(*_func)(unsafe.Pointer(&datap.pclntable[datap.ftab[idx].funcoff])), datap}
-}
-
-type pcvalueCache struct {
-	entries [2][8]pcvalueCacheEnt
 }
 
 type pcvalueCacheEnt struct {

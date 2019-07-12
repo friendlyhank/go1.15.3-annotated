@@ -662,7 +662,7 @@ type schedt struct {
 	// m.exited is set. Linked through m.freelink.
 	freem *m
 
-	gcwaiting  uint32 // gc is waiting to run
+	gcwaiting  uint32 //等待垃圾回收 gc is waiting to run
 	stopwait   int32
 	stopnote   note
 	sysmonwait uint32
