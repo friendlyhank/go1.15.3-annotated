@@ -205,7 +205,7 @@ func main() {
 		// has a main, but it is not executed.
 		return
 	}
-	//绑定方法
+	//执行用户入口函数
 	fn := main_main // make an indirect call, as the linker doesn't know the address of the main package when laying down the runtime
 	fn()
 	if raceenabled {
@@ -575,7 +575,9 @@ func schedinit() {
 	goargs()
 	goenvs()
 
+	//解析GODEBUG的调试参数
 	parsedebugvars()
+	//初始化垃圾回收
 	gcinit()
 
 	sched.lastpoll = uint64(nanotime())

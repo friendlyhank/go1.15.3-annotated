@@ -4,10 +4,6 @@
     <list default="true" id="01ce4f6b-40f3-42e5-a229-8a3cd7669e1b" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/runtime/proc.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/proc.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/runtime2.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/runtime2.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/stack.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/stack.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/symtab.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/symtab.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/sys_x86.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/sys_x86.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -23,8 +19,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/runtime/proc.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="157">
-              <caret line="558" column="22" selection-start-line="558" selection-start-column="22" selection-end-line="558" selection-end-column="22" />
+            <state relative-caret-position="240">
+              <caret line="4107" column="24" selection-start-line="4107" selection-start-column="24" selection-end-line="4107" selection-end-column="24" />
             </state>
           </provider>
         </entry>
@@ -32,7 +28,7 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/runtime/runtime2.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="293">
+            <state relative-caret-position="10200">
               <caret line="430" column="24" selection-start-line="430" selection-start-column="24" selection-end-line="430" selection-end-column="24" />
             </state>
           </provider>
@@ -41,7 +37,7 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/runtime/stubs.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="117">
+            <state relative-caret-position="432">
               <caret line="18" column="5" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
             </state>
           </provider>
@@ -110,7 +106,7 @@
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="6">
+  <component name="ProjectFrameBounds" extendedState="7">
     <option name="x" value="-10" />
     <option name="y" value="-10" />
     <option name="width" value="1940" />
@@ -173,11 +169,11 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="-7" y="-7" width="1550" height="838" extended-state="6" />
+    <frame x="-7" y="-7" width="1550" height="838" extended-state="7" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.6805556" visible="true" weight="0.09919571" />
-      <window_info id="Structure" order="1" sideWeight="0.31944445" side_tool="true" visible="true" weight="0.09919571" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.67772514" visible="true" weight="0.049597856" />
+      <window_info id="Structure" order="1" sideWeight="0.3222749" side_tool="true" visible="true" weight="0.049597856" />
       <window_info id="Favorites" order="2" sideWeight="0.5022936" side_tool="true" weight="0.18431635" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
@@ -185,11 +181,11 @@
       <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info active="true" anchor="bottom" id="TODO" order="6" visible="true" weight="0.08215298" />
+      <window_info anchor="bottom" id="TODO" order="6" weight="0.3611898" />
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Database Changes" order="8" />
       <window_info anchor="bottom" id="Version Control" order="9" weight="0.3286119" />
-      <window_info anchor="bottom" id="Terminal" order="10" weight="0.41218132" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="10" visible="true" weight="0.10339943" />
       <window_info anchor="bottom" id="Event Log" order="11" side_tool="true" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -400,13 +396,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/runtime/stubs.go">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="117">
-          <caret line="18" column="5" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/runtime/stack.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="197">
@@ -421,17 +410,24 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/runtime/proc.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="240">
+          <caret line="4107" column="24" selection-start-line="4107" selection-start-column="24" selection-end-line="4107" selection-end-column="24" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/runtime/runtime2.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="293">
+        <state relative-caret-position="10200">
           <caret line="430" column="24" selection-start-line="430" selection-start-column="24" selection-end-line="430" selection-end-column="24" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/runtime/proc.go">
+    <entry file="file://$PROJECT_DIR$/src/runtime/stubs.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="157">
-          <caret line="558" column="22" selection-start-line="558" selection-start-column="22" selection-end-line="558" selection-end-column="22" />
+        <state relative-caret-position="432">
+          <caret line="18" column="5" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
         </state>
       </provider>
     </entry>
