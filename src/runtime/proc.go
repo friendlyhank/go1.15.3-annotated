@@ -4156,7 +4156,7 @@ func procresize(nprocs int32) *p {
 		// We must do this before destroying our current P
 		// because p.destroy itself has write barriers, so we
 		// need to do that from a valid P.
-		// 释放当前P,因为它已经失效
+		// 释放当前P,因为它已经失效了
 		if _g_.m.p != 0 {
 			if trace.enabled {
 				// Pretend that we were descheduled
