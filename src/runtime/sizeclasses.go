@@ -76,7 +76,7 @@ const (
 	smallSizeDiv    = 8
 	smallSizeMax    = 1024
 	largeSizeDiv    = 128
-	_NumSizeClasses = 67
+	_NumSizeClasses = 67 //67种需求
 	_PageShift      = 13
 )
 

@@ -1174,9 +1174,11 @@ HaveSpan:
 	if s.npages == npage {
 		h.free.erase(t)
 	} else if s.npages > npage {
+		//如果页数超出预期,则进行分割
 		// Trim off the lower bits and make that our new span.
 		// Do this in-place since this operation does not
 		// affect the original span's location in the treap.
+		//创建新mspan对象,用于管理分割下来的内存块
 		n := (*mspan)(h.spanalloc.alloc())
 		h.free.mutate(t, func(s *mspan) {
 			n.init(s.base(), npage)
@@ -1241,6 +1243,7 @@ HaveSpan:
 // h must be locked.
 func (h *mheap) grow(npage uintptr) bool {
 	ask := npage << _PageShift
+	//向操作系统申请内存
 	v, size := h.sysAlloc(ask)
 	if v == nil {
 		print("runtime: out of memory: cannot allocate ", ask, "-byte block (", memstats.heap_sys, " in use)\n")
@@ -1343,6 +1346,7 @@ func (h *mheap) freeSpanLocked(s *mspan, acctinuse, acctidle bool) {
 	if acctidle {
 		memstats.heap_idle += uint64(s.npages << _PageShift)
 	}
+
 	s.state = mSpanFree
 
 	// Coalesce span with neighbors.

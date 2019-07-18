@@ -439,6 +439,7 @@ func mallocinit() {
 	_g_.m.mcache = allocmcache()
 
 	// Create initial arena growth hints.
+	//64位系统
 	if sys.PtrSize == 8 {
 		// On a 64-bit machine, we pick the following hints
 		// because:
@@ -472,6 +473,7 @@ func mallocinit() {
 		// On darwin/arm64, the address space is even smaller.
 		// On AIX, mmaps starts at 0x0A00000000000000 for 64-bit.
 		// processes.
+		//// 尝试在固定起始位置(0x0000XXc000000000҅XX = 00 ... 7f)保留地址空间
 		for i := 0x7f; i >= 0; i-- {
 			var p uintptr
 			switch {
