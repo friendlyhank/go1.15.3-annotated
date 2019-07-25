@@ -994,9 +994,11 @@ func newstack() {
 	// it needs a lock held by the goroutine), that small preemption turns
 	// into a real deadlock.
 	if preempt {
+		//如果M持有锁,或者正在进行内存分配、垃圾回收等操作,不抢占，留待下次
 		if thisg.m.locks != 0 || thisg.m.mallocing != 0 || thisg.m.preemptoff != "" || thisg.m.p.ptr().status != _Prunning {
 			// Let the goroutine keep running for now.
 			// gp->preempt is set, so it will be preempted next time.
+			//stackguard0恢复溢出检查用途，下次G.preempt恢复
 			gp.stackguard0 = gp.stack.lo + _StackGuard
 			gogo(&gp.sched) // never return
 		}
@@ -1030,6 +1032,7 @@ func newstack() {
 		}
 		// Synchronize with scang.
 		casgstatus(gp, _Grunning, _Gwaiting)
+		//垃圾回收本身也算一次抢占，忽略本次抢占调度
 		if gp.preemptscan {
 			for !castogscanstatus(gp, _Gwaiting, _Gscanwaiting) {
 				// Likely to be racing with the GC as
@@ -1055,6 +1058,7 @@ func newstack() {
 		}
 
 		// Act like goroutine called runtime.Gosched.
+		//开始抢占调度，将当前G放回队列,让M执行其他任务。
 		casgstatus(gp, _Gwaiting, _Grunning)
 		gopreempt_m(gp) // never return
 	}

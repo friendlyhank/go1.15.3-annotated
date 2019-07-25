@@ -689,6 +689,7 @@ func ready(gp *g, traceskip int, next bool) {
 	}
 
 	// status is Gwaiting or Gscanwaiting, make Grunnable and put on runq
+	//修正状态,重新放回本地runnext
 	casgstatus(gp, _Gwaiting, _Grunnable)
 	runqput(_g_.m.p.ptr(), gp, next)
 	if atomic.Load(&sched.npidle) != 0 && atomic.Load(&sched.nmspinning) == 0 {
@@ -1041,12 +1042,16 @@ func stopTheWorldWithSema() {
 
 	lock(&sched.lock)
 	sched.stopwait = gomaxprocs
+	//设置停止标志，让schedule之类的调用主动休眠M
 	atomic.Store(&sched.gcwaiting, 1)
+	//向所有正在运行的G发出抢占调度
 	preemptall()
 	// stop current P
+	//暂停当前P
 	_g_.m.p.ptr().status = _Pgcstop // Pgcstop is only diagnostic.
 	sched.stopwait--
 	// try to retake all P's in Psyscall status
+	//尝试暂停所有syscall状态的P
 	for _, p := range allp {
 		s := p.status
 		if s == _Psyscall && atomic.Cas(&p.status, s, _Pgcstop) {
@@ -2664,10 +2669,10 @@ func park_m(gp *g) {
 	if trace.enabled {
 		traceGoPark(_g_.m.waittraceev, _g_.m.waittraceskip)
 	}
-
+	//重置属性
 	casgstatus(gp, _Grunning, _Gwaiting)
 	dropg()
-
+	//执行解锁函数。如果返回false,则恢复执行
 	if fn := _g_.m.waitunlockf; fn != nil {
 		ok := fn(gp, _g_.m.waitlock)
 		_g_.m.waitunlockf = nil
@@ -2680,6 +2685,7 @@ func park_m(gp *g) {
 			execute(gp, true) // Schedule it back, never returns.
 		}
 	}
+	//调度执行其他任务
 	schedule()
 }
 
@@ -2692,9 +2698,10 @@ func goschedImpl(gp *g) {
 	casgstatus(gp, _Grunning, _Grunnable)
 	dropg()
 	lock(&sched.lock)
+	//将当前G放回到全局队列
 	globrunqput(gp)
 	unlock(&sched.lock)
-
+	//重新调度执行其他任务
 	schedule()
 }
 
@@ -4469,6 +4476,7 @@ func 	sysmon() {
 		// poll network if not polled for more than 10ms
 		lastpoll := int64(atomic.Load64(&sched.lastpoll))
 		now := nanotime()
+		//获取超过10ms的netpoll结果
 		if netpollinited() && lastpoll != 0 && lastpoll+10*1000*1000 < now {
 			atomic.Cas64(&sched.lastpoll, uint64(lastpoll), uint64(now))
 			list := netpoll(false) // non-blocking - returns list of goroutines
@@ -4487,6 +4495,8 @@ func 	sysmon() {
 		}
 		// retake P's blocked in syscalls
 		// and preempt long running G's
+		//抢夺syscall长时间阻塞的P。
+		//向长时间运行的G发出抢占调度
 		if retake(now) != 0 {
 			idle = 0
 		} else {
@@ -4527,6 +4537,7 @@ func retake(now int64) uint32 {
 	// We can't use a range loop over allp because we may
 	// temporarily drop the allpLock. Hence, we need to re-fetch
 	// allp each time around the loop.
+	//遍历P。
 	for i := 0; i < len(allp); i++ {
 		_p_ := allp[i]
 		if _p_ == nil {
@@ -4550,8 +4561,10 @@ func retake(now int64) uint32 {
 				sysretake = true
 			}
 		}
+		//P处于syscall模式
 		if s == _Psyscall {
 			// Retake P from syscall if it's there for more than 1 sysmon tick (at least 20us).
+			//更新syscall统计信息
 			t := int64(_p_.syscalltick)
 			if !sysretake && int64(pd.syscalltick) != t {
 				pd.syscalltick = uint32(t)
@@ -4561,6 +4574,7 @@ func retake(now int64) uint32 {
 			// On the one hand we don't want to retake Ps if there is no other work to do,
 			// but on the other hand we want to retake them eventually
 			// because they can prevent the sysmon thread from deep sleep.
+			//检查是否有其他任务需要P，是否超出时间限制(2 tick,20us),是否必要抢夺P.
 			if runqempty(_p_) && atomic.Load(&sched.nmspinning)+atomic.Load(&sched.npidle) > 0 && pd.syscallwhen+10*1000*1000 > now {
 				continue
 			}
@@ -4571,6 +4585,7 @@ func retake(now int64) uint32 {
 			// Otherwise the M from which we retake can exit the syscall,
 			// increment nmidle and report deadlock.
 			incidlelocked(-1)
+			//抢夺P
 			if atomic.Cas(&_p_.status, s, _Pidle) {
 				if trace.enabled {
 					traceGoSysBlock(_p_)
@@ -4783,6 +4798,7 @@ func mget() *m {
 // Sched must be locked.
 // May run during STW, so write barriers are not allowed.
 //go:nowritebarrierrec
+//将G放到全局队列
 func globrunqput(gp *g) {
 	sched.runq.pushBack(gp)
 	sched.runqsize++

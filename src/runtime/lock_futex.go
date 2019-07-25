@@ -123,16 +123,19 @@ func unlock(l *mutex) {
 }
 
 // One-time notifications.
+//重置休眠条件
 func noteclear(n *note) {
 	n.key = 0
 }
 
 func notewakeup(n *note) {
+	//如果old != 0,表示已经执行过唤醒操作
 	old := atomic.Xchg(key32(&n.key), 1)
 	if old != 0 {
 		print("notewakeup - double wakeup (", old, ")\n")
 		throw("notewakeup - double wakeup")
 	}
+	//唤醒后n.key==1
 	futexwakeup(key32(&n.key), 1)
 }
 
@@ -148,11 +151,11 @@ func notesleep(n *note) {
 	}
 	for atomic.Load(key32(&n.key)) == 0 {
 		gp.m.blocked = true
-		futexsleep(key32(&n.key), 0, ns)
+		futexsleep(key32(&n.key), 0, ns)//检查n.key==0,休眠
 		if *cgo_yield != nil {
 			asmcgocall(*cgo_yield, nil)
 		}
-		gp.m.blocked = false
+		gp.m.blocked = false//唤醒n.key == 1
 	}
 }
 
