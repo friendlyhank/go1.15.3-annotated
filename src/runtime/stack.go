@@ -65,9 +65,11 @@ const (
 	// to each stack below the usual guard area for OS-specific
 	// purposes like signal handling. Used on Windows, Plan 9,
 	// and iOS because they do not use a separate stack.
+	//操作系统需要保留的区域，比如用来处理信号等。
 	_StackSystem = sys.GoosWindows*512*sys.PtrSize + sys.GoosPlan9*512 + sys.GoosDarwin*sys.GoarchArm*1024 + sys.GoosDarwin*sys.GoarchArm64*1024
 
 	// The minimum size of stack used by Go code
+	//默认的栈大小
 	_StackMin = 2048
 
 	// The minimum stack size to allocate.
@@ -90,6 +92,7 @@ const (
 
 	// The stack guard is a pointer this many bytes above the
 	// bottom of the stack.
+	//StackGuard是一个警戒指针，用来判断栈容量是否需要扩张
 	_StackGuard = 880*sys.StackGuardMultiplier + _StackSystem
 
 	// After a stack split check the SP is allowed to be this
@@ -282,8 +285,10 @@ func stackcacherelease(c *mcache, order uint8) {
 	x := c.stackcache[order].list
 	size := c.stackcache[order].size
 	lock(&stackpoolmu)
+	//如果当前链表过大,则释放一半
 	for size > _StackCacheSize/2 {
 		y := x.ptr().next
+		//每次释放一个,他们可能属于不同的span
 		stackpoolfree(x, order)
 		x = y
 		size -= _FixedStack << order
@@ -831,6 +836,7 @@ func syncadjustsudogs(gp *g, used uintptr, adjinfo *adjustinfo) uintptr {
 // particular, no other G may be writing to gp's stack (e.g., via a
 // channel operation). If sync is false, copystack protects against
 // concurrent channel operations.
+//复制栈
 func copystack(gp *g, newsize uintptr, sync bool) {
 	if gp.syscallsp != 0 {
 		throw("stack growth not allowed in system call")
@@ -842,7 +848,9 @@ func copystack(gp *g, newsize uintptr, sync bool) {
 	used := old.hi - gp.sched.sp
 
 	// allocate new stack
+	//从缓存或堆分配新栈空间
 	new := stackalloc(uint32(newsize))
+	//清零
 	if stackPoisonCopy != 0 {
 		fillstack(new, 0xfd)
 	}
@@ -874,6 +882,7 @@ func copystack(gp *g, newsize uintptr, sync bool) {
 	}
 
 	// Copy the stack (or the rest of it) to the new location
+	//拷贝数据到新的空间
 	memmove(unsafe.Pointer(new.hi-ncopy), unsafe.Pointer(old.hi-ncopy), ncopy)
 
 	// Adjust remaining structures that have pointers into stacks.
@@ -887,6 +896,7 @@ func copystack(gp *g, newsize uintptr, sync bool) {
 	}
 
 	// Swap out old stack for new one
+	//切换到新栈
 	gp.stack = new
 	gp.stackguard0 = new.lo + _StackGuard // NOTE: might clobber a preempt request
 	gp.sched.sp = new.hi - used
@@ -896,6 +906,7 @@ func copystack(gp *g, newsize uintptr, sync bool) {
 	gentraceback(^uintptr(0), ^uintptr(0), 0, gp, 0, nil, 0x7fffffff, adjustframe, noescape(unsafe.Pointer(&adjinfo)), 0)
 
 	// free old stack
+	//从旧栈清零后释放
 	if stackPoisonCopy != 0 {
 		fillstack(old, 0xfc)
 	}
@@ -1049,6 +1060,7 @@ func newstack() {
 	}
 
 	// Allocate a bigger segment and move the stack.
+	//扩张2倍
 	oldsize := gp.stack.hi - gp.stack.lo
 	newsize := oldsize * 2
 	if newsize > maxstacksize {
@@ -1062,10 +1074,12 @@ func newstack() {
 
 	// The concurrent GC will not scan the stack while we are doing the copy since
 	// the gp is in a Gcopystack status.
+	//拷贝栈数据后切换到新栈
 	copystack(gp, newsize, true)
 	if stackDebug >= 1 {
 		print("stack grow done\n")
 	}
+	//恢复执行
 	casgstatus(gp, _Gcopystack, _Grunning)
 	gogo(&gp.sched)
 }
@@ -1090,6 +1104,7 @@ func gostartcallfn(gobuf *gobuf, fv *funcval) {
 // Maybe shrink the stack being used by gp.
 // Called at garbage collection time.
 // gp must be stopped, but the world need not be.
+//收缩扩展的栈空间,以节约内存
 func shrinkstack(gp *g) {
 	gstatus := readgstatus(gp)
 	if gp.stack.lo == 0 {
@@ -1109,6 +1124,7 @@ func shrinkstack(gp *g) {
 		return
 	}
 
+	//收缩目标是一半大小
 	oldsize := gp.stack.hi - gp.stack.lo
 	newsize := oldsize / 2
 	// Don't shrink the allocation below the minimum-sized stack
@@ -1121,6 +1137,7 @@ func shrinkstack(gp *g) {
 	// current stack. The currently used stack includes everything
 	// down to the SP plus the stack guard space that ensures
 	// there's room for nosplit functions.
+	//如果使用空间超过1/4,则不收缩
 	avail := gp.stack.hi - gp.stack.lo
 	if used := gp.stack.hi - gp.sched.sp + _StackLimit; used >= avail/4 {
 		return
@@ -1138,7 +1155,7 @@ func shrinkstack(gp *g) {
 	if stackDebug > 0 {
 		print("shrinking stack ", oldsize, "->", newsize, "\n")
 	}
-
+	//复制栈并替换
 	copystack(gp, newsize, false)
 }
 

@@ -2036,6 +2036,7 @@ func handoffp(_p_ *p) {
 	// findrunnable would return a G to run on _p_.
 
 	// if it has local work, start it straight away
+	//如果P本地或全局有任务，直接唤醒某个M开始工作。
 	if !runqempty(_p_) || sched.runqsize != 0 {
 		startm(_p_, false)
 		return
@@ -2080,6 +2081,7 @@ func handoffp(_p_ *p) {
 		startm(_p_, false)
 		return
 	}
+	//没有任务就放回空闲队列
 	pidleput(_p_)
 	unlock(&sched.lock)
 }
@@ -2876,6 +2878,7 @@ func reentersyscall(pc, sp uintptr) {
 	_g_.throwsplit = true
 
 	// Leave SP around for GC and traceback.
+	//保存执行现场
 	save(pc, sp)
 	_g_.syscallsp = sp
 	_g_.syscallpc = pc
@@ -2894,7 +2897,7 @@ func reentersyscall(pc, sp uintptr) {
 		// syscall
 		save(pc, sp)
 	}
-
+	//确保sysmon运行
 	if atomic.Load(&sched.sysmonwait) != 0 {
 		systemstack(entersyscall_sysmon)
 		save(pc, sp)
@@ -2905,7 +2908,7 @@ func reentersyscall(pc, sp uintptr) {
 		systemstack(runSafePointFn)
 		save(pc, sp)
 	}
-
+	//设置相关状态
 	_g_.m.syscalltick = _g_.m.p.ptr().syscalltick
 	_g_.sysblocktraced = true
 	_g_.m.mcache = nil
@@ -3007,6 +3010,7 @@ func entersyscallblock_handoff() {
 		traceGoSysCall()
 		traceGoSysBlock(getg().m.p.ptr())
 	}
+	//释放P,让它去执行其他任务
 	handoffp(releasep())
 }
 
@@ -3107,6 +3111,7 @@ func exitsyscallfast(oldp *p) bool {
 	_g_ := getg()
 
 	// Freezetheworld sets stopwait but does not retake P's.
+	//STW状态,就不要继续了
 	if sched.stopwait == freezeStopWait {
 		return false
 	}
@@ -3120,6 +3125,7 @@ func exitsyscallfast(oldp *p) bool {
 	}
 
 	// Try to get any other idle P.
+	//获取其他空闲P
 	if sched.pidle != 0 {
 		var ok bool
 		systemstack(func() {
@@ -3168,11 +3174,13 @@ func exitsyscallfast_reacquired() {
 func exitsyscallfast_pidle() bool {
 	lock(&sched.lock)
 	_p_ := pidleget()
+	//唤醒sysmon
 	if _p_ != nil && atomic.Load(&sched.sysmonwait) != 0 {
 		atomic.Store(&sched.sysmonwait, 0)
 		notewakeup(&sched.sysmonnote)
 	}
 	unlock(&sched.lock)
+	//重现关联
 	if _p_ != nil {
 		acquirep(_p_)
 		return true
@@ -3186,12 +3194,13 @@ func exitsyscallfast_pidle() bool {
 //go:nowritebarrierrec
 func exitsyscall0(gp *g) {
 	_g_ := getg()
-
+	//修改状态,接触和M的关联
 	casgstatus(gp, _Gsyscall, _Grunnable)
 	dropg()
 	lock(&sched.lock)
 	var _p_ *p
 	if schedEnabled(_g_) {
+		//再次获取空闲P
 		_p_ = pidleget()
 	}
 	if _p_ == nil {
@@ -3201,6 +3210,7 @@ func exitsyscall0(gp *g) {
 		notewakeup(&sched.sysmonnote)
 	}
 	unlock(&sched.lock)
+	//再次检查P,以便执行当前任务
 	if _p_ != nil {
 		acquirep(_p_)
 		execute(gp, false) // Never returns.
@@ -3210,6 +3220,7 @@ func exitsyscall0(gp *g) {
 		stoplockedm()
 		execute(gp, false) // Never returns.
 	}
+	//关联P失败,休眠当前M
 	stopm()
 	schedule() // Never returns.
 }
@@ -4400,7 +4411,7 @@ var forcegcperiod int64 = 2 * 60 * 1e9
 // Always runs without a P, so write barriers are not allowed.
 //
 //go:nowritebarrierrec
-func sysmon() {
+func 	sysmon() {
 	lock(&sched.lock)
 	sched.nmsys++
 	checkdead()
@@ -4419,6 +4430,7 @@ func sysmon() {
 			delay = 10 * 1000
 		}
 		usleep(delay)
+		//STW时休眠sysmon
 		if debug.schedtrace <= 0 && (sched.gcwaiting != 0 || atomic.Load(&sched.npidle) == uint32(gomaxprocs)) {
 			lock(&sched.lock)
 			if atomic.Load(&sched.gcwaiting) != 0 || atomic.Load(&sched.npidle) == uint32(gomaxprocs) {
