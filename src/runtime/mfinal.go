@@ -312,6 +312,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		// (and we don't have the data structures to record them).
 		return
 	}
+	//从接口获取类型和对象指针。
 	e := efaceOf(&obj)
 	etyp := e._type
 	if etyp == nil {
@@ -325,6 +326,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		throw("nil elem type!")
 	}
 
+	//忽略nil对象
 	// find the containing object
 	base, _, _ := findObject(uintptr(e.data), 0, 0)
 
@@ -360,9 +362,10 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 			throw("runtime.SetFinalizer: pointer not at beginning of allocated block")
 		}
 	}
-
+	//获取finalizer函数信息
 	f := efaceOf(&finalizer)
 	ftyp := f._type
+	//如果finalizer=nil,则移除析构函数
 	if ftyp == nil {
 		// switch to system stack and remove finalizer
 		systemstack(func() {
@@ -370,10 +373,11 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		})
 		return
 	}
-
+	//保存finalizer是函数
 	if ftyp.kind&kindMask != kindFunc {
 		throw("runtime.SetFinalizer: second argument is " + ftyp.string() + ", not a function")
 	}
+	//检查finalizer参数数量及其类型
 	ft := (*functype)(unsafe.Pointer(ftyp))
 	if ft.dotdotdot() {
 		throw("runtime.SetFinalizer: cannot pass " + etyp.string() + " to finalizer " + ftyp.string() + " because dotdotdot")
@@ -402,9 +406,11 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 			goto okarg
 		}
 	}
+	//检查结果错误,抛出异常
 	throw("runtime.SetFinalizer: cannot pass " + etyp.string() + " to finalizer " + ftyp.string())
 okarg:
 	// compute size needed for return parameters
+	//计算返回大小
 	nret := uintptr(0)
 	for _, t := range ft.out() {
 		nret = round(nret, uintptr(t.align)) + uintptr(t.size)
@@ -412,8 +418,9 @@ okarg:
 	nret = round(nret, sys.PtrSize)
 
 	// make sure we have a finalizer goroutine
+	//确保fianlizer goroutine运行
 	createfing()
-
+	//不能重复设置finalizer函数。
 	systemstack(func() {
 		if !addfinalizer(e.data, (*funcval)(f.data), nret, fint, ot) {
 			throw("runtime.SetFinalizer: finalizer already set")

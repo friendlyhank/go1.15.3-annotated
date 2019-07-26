@@ -1124,14 +1124,17 @@ func startTheWorldWithSema(emitTraceEvent bool) int64 {
 		procs = newprocs
 		newprocs = 0
 	}
+	//检查是否需要调整P的数量
 	p1 := procresize(procs)
+	//接触停止状态
 	sched.gcwaiting = 0
+	//唤醒sysnmon
 	if sched.sysmonwait != 0 {
 		sched.sysmonwait = 0
 		notewakeup(&sched.sysmonnote)
 	}
 	unlock(&sched.lock)
-
+	//循环有任务的P链表，让他们继续工作
 	for p1 != nil {
 		p := p1
 		p1 = p1.link.ptr()
@@ -1158,6 +1161,7 @@ func startTheWorldWithSema(emitTraceEvent bool) int64 {
 	// Wakeup an additional proc in case we have excessive runnable goroutines
 	// in local queues or in the global queue. If we don't, the proc will park itself.
 	// If we have lots of excessive work, resetspinning will unpark additional procs as necessary.
+	//让闲置的家伙都工作起来
 	if atomic.Load(&sched.npidle) != 0 && atomic.Load(&sched.nmspinning) == 0 {
 		wakep()
 	}

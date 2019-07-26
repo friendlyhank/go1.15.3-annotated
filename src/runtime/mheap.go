@@ -1623,9 +1623,9 @@ const (
 
 //go:notinheap
 type special struct {
-	next   *special // linked list in span
-	offset uint16   // span offset of object
-	kind   byte     // kind of special
+	next   *special // 链表linked list in span
+	offset uint16   // 目标对象地址偏移量span offset of object
+	kind   byte     // 类型kind of special
 }
 
 // Adds the special record s to the list of special records for
@@ -1735,6 +1735,7 @@ type specialfinalizer struct {
 // Adds a finalizer to the object p. Returns true if it succeeded.
 func addfinalizer(p unsafe.Pointer, f *funcval, nret uintptr, fint *_type, ot *ptrtype) bool {
 	lock(&mheap_.speciallock)
+	//从固定分配器创建specialfinalizer
 	s := (*specialfinalizer)(mheap_.specialfinalizeralloc.alloc())
 	unlock(&mheap_.speciallock)
 	s.special.kind = _KindSpecialFinalizer
@@ -1742,6 +1743,7 @@ func addfinalizer(p unsafe.Pointer, f *funcval, nret uintptr, fint *_type, ot *p
 	s.nret = nret
 	s.fint = fint
 	s.ot = ot
+	//添加(注意,使用了匿名嵌入字段)
 	if addspecial(p, &s.special) {
 		// This is responsible for maintaining the same
 		// GC-related invariants as markrootSpans in any

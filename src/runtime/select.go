@@ -63,7 +63,7 @@ func selunlock(scases []scase, lockorder []uint16) {
 	// Consider the following situation.
 	// First M calls runtime·park() in runtime·selectgo() passing the sel.
 	// Once runtime·park() has unlocked the last lock, another M makes
-	// the G that calls select runnable again and schedules it for execution.
+	// the G that calls seledeferprocct runnable again and schedules it for execution.
 	// When the G runs on another M, it locks all the locks and frees sel.
 	// Now if the first M touches sel, it will access freed memory.
 	for i := len(scases) - 1; i >= 0; i-- {

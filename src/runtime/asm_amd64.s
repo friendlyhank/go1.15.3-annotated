@@ -587,12 +587,12 @@ TEXT ·publicationBarrier(SB),NOSPLIT,$0-0
 // 2. sub 5 bytes from the callers return
 // 3. jmp to the argument
 TEXT runtime·jmpdefer(SB), NOSPLIT, $0-16
-	MOVQ	fv+0(FP), DX	// fn
-	MOVQ	argp+8(FP), BX	// caller sp
-	LEAQ	-8(BX), SP	// caller sp after CALL
+	MOVQ	fv+0(FP), DX	// fn 延迟函数fn地址
+	MOVQ	argp+8(FP), BX	// caller sp argp+8是arg0地址,也就是main的SP
+	LEAQ	-8(BX), SP	// caller sp after CALL 将SP-8获取的其实是call deferreturn 是压入的main IP
 	MOVQ	-8(SP), BP	// restore BP as if deferreturn returned (harmless if framepointers not in use)
-	SUBQ	$5, (SP)	// return to CALL again
-	MOVQ	0(DX), BX
+	SUBQ	$5, (SP)	// return to CALL again CALL指令长度5，-5返回的就是CALL deferreturn指令地址
+	MOVQ	0(DX), BX //执行fn函数
 	JMP	BX	// but first run the deferred function
 
 // Save state of caller into g->sched. Smashes R8, R9.

@@ -397,8 +397,8 @@ type g struct {
 	stackguard0 uintptr // offset known to liblink
 	stackguard1 uintptr // offset known to liblink
 
-	_panic         *_panic // innermost panic - offset known to liblink
-	_defer         *_defer // innermost defer
+	_panic         *_panic //错误信息会被打包成_painc innermost panic - offset known to liblink
+	_defer         *_defer //defer链表 innermost defer
 	m              *m      // current m; offset known to arm liblink
 	sched          gobuf  //用于保存执行现场
 	syscallsp      uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
@@ -532,7 +532,7 @@ type p struct {
 	mcache      *mcache
 	raceprocctx uintptr
 
-	deferpool    [5][]*_defer // pool of available defer structs of different sizes (see panic.go)
+	deferpool    [5][]*_defer //defer池的保存 pool of available defer structs of different sizes (see panic.go)
 	deferpoolbuf [5][32]*_defer
 
 	// Cache of goroutine ids, amortizes accesses to runtime·sched.goidgen.
@@ -786,8 +786,8 @@ type _defer struct {
 	siz     int32 // includes both arguments and results
 	started bool
 	heap    bool
-	sp      uintptr // sp at time of defer
-	pc      uintptr
+	sp      uintptr //调用deferproc时的sp sp at time of defer
+	pc      uintptr//调用deferproc时的IP
 	fn      *funcval
 	_panic  *_panic // panic that is running defer
 	link    *_defer
