@@ -1045,18 +1045,23 @@ func Index(s, substr string) int {
 		c0 := substr[0]
 		c1 := substr[1]
 		i := 0
+		//string的长度减去substr的长度加一
 		t := len(s) - n + 1
 		fails := 0
 		for i < t {
 			if s[i] != c0 {
 				// IndexByte is faster than bytealg.IndexString, so use it as long as
 				// we're not getting lots of false positives.
+				//然后判断c0是否在string的切分slice中，如果t长度里木有,那就是真木有了
+				//就是假设string长度为5,substr长度为3,5-3+1，3个字符串里都不包含substr的第一个就真木有了
 				o := IndexByte(s[i:t], c0)
 				if o < 0 {
 					return -1
 				}
+				//这里找出来了也不一定，有可能包含多个
 				i += o
 			}
+			//第二位也是相等的并且从找到c0匹配的起始是直接相等的,那就直接返回了
 			if s[i+1] == c1 && s[i:i+n] == substr {
 				return i
 			}
@@ -1076,6 +1081,7 @@ func Index(s, substr string) int {
 	c0 := substr[0]
 	c1 := substr[1]
 	i := 0
+	//
 	t := len(s) - n + 1
 	fails := 0
 	for i < t {

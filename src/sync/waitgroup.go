@@ -51,6 +51,7 @@ func (wg *WaitGroup) state() (statep *uint64, semap *uint32) {
 // new Add calls must happen after all previous Wait calls have returned.
 // See the WaitGroup example.
 func (wg *WaitGroup) Add(delta int) {
+	// 获取到wg.state1数组中元素组成的二进制对应的十进制的值
 	statep, semap := wg.state()
 	if race.Enabled {
 		_ = *statep // trigger nil deref early
@@ -61,7 +62,9 @@ func (wg *WaitGroup) Add(delta int) {
 		race.Disable()
 		defer race.Enable()
 	}
+	//高32位是计数器
 	state := atomic.AddUint64(statep, uint64(delta)<<32)
+	//获取计数器
 	v := int32(state >> 32)
 	w := uint32(state)
 	if race.Enabled && delta > 0 && v == int32(delta) {
@@ -76,6 +79,7 @@ func (wg *WaitGroup) Add(delta int) {
 	if w != 0 && delta > 0 && v == int32(delta) {
 		panic("sync: WaitGroup misuse: Add called concurrently with Wait")
 	}
+	//计数器添加成功,直接返回
 	if v > 0 || w == 0 {
 		return
 	}
@@ -95,6 +99,7 @@ func (wg *WaitGroup) Add(delta int) {
 }
 
 // Done decrements the WaitGroup counter by one.
+//调用一次计数器减一
 func (wg *WaitGroup) Done() {
 	wg.Add(-1)
 }
@@ -110,6 +115,7 @@ func (wg *WaitGroup) Wait() {
 		state := atomic.LoadUint64(statep)
 		v := int32(state >> 32)
 		w := uint32(state)
+		//结束等待
 		if v == 0 {
 			// Counter is 0, no need to wait.
 			if race.Enabled {
