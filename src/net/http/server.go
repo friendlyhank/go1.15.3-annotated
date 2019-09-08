@@ -82,6 +82,7 @@ var (
 // RST_STREAM, depending on the HTTP protocol. To abort a handler so
 // the client sees an interrupted response but the server doesn't log
 // an error, panic with the value ErrAbortHandler.
+//声明一个Handler接口,若某函数实现了ServeHTTP函数就实现了该接口
 type Handler interface {
 	ServeHTTP(ResponseWriter, *Request)
 }
@@ -168,7 +169,7 @@ type Flusher interface {
 	// Flush sends any buffered data to the client.
 	Flush()
 }
-
+type Context interface
 // The Hijacker interface is implemented by ResponseWriters that allow
 // an HTTP handler to take over the connection.
 //
@@ -2189,16 +2190,17 @@ func RedirectHandler(url string, code int) Handler {
 // ServeMux also takes care of sanitizing the URL request path and the Host
 // header, stripping the port number and redirecting any request containing . or
 // .. elements or repeated slashes to an equivalent, cleaner URL.
+//设置路由规则
 type ServeMux struct {
 	mu    sync.RWMutex
-	m     map[string]muxEntry
-	es    []muxEntry // slice of entries sorted from longest to shortest.
-	hosts bool       // whether any patterns contain hostnames
+	m     map[string]muxEntry //路由map结构
+	es    []muxEntry          //路由slice结构 slice of entries sorted from longest to shortest.
+	hosts bool                // whether any patterns contain hostnames
 }
 
 type muxEntry struct {
-	h       Handler
-	pattern string
+	h       Handler //Handler
+	pattern string  //路径
 }
 
 // NewServeMux allocates and returns a new ServeMux.

@@ -59,6 +59,7 @@ import (
 // API boundaries.
 //
 // Context's methods may be called by multiple goroutines simultaneously.
+//context包里的方式是线程安全的，可以被多个groutine使用
 type Context interface {
 	// Deadline returns the time when work done on behalf of this context
 	// should be canceled. Deadline returns ok==false when no deadline is
@@ -94,6 +95,7 @@ type Context interface {
 	//
 	// See https://blog.golang.org/pipelines for more examples of how to use
 	// a Done channel for cancellation.
+	//当Context被canceled或是time out的时候,Done返回一个被closed的chanel
 	Done() <-chan struct{}
 
 	// If Done is not yet closed, Err returns nil.
