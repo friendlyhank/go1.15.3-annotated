@@ -400,15 +400,22 @@ func (c *cancelCtx) cancel(removeFromParent bool, err error) {
 func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
 	if cur, ok := parent.Deadline(); ok && cur.Before(d) {
 		// The current deadline is already sooner than the new one.
+		// 如果父节点 context 的 deadline 早于指定时间。直接构建一个可取消的 context。
+		// 原因是一旦父节点超时，自动调用 cancel 函数，子节点也会随之取消。
+		// 所以不用单独处理子节点的计时器时间到了之后，自动调用 cancel 函数
 		return WithCancel(parent)
 	}
+	// 构建 timerCtx
 	c := &timerCtx{
 		cancelCtx: newCancelCtx(parent),
 		deadline:  d,
 	}
+	// 挂靠到父节点上
 	propagateCancel(parent, c)
+	// 计算当前距离 deadline 的时间
 	dur := time.Until(d)
 	if dur <= 0 {
+		// 直接取消
 		c.cancel(true, DeadlineExceeded) // deadline has already passed
 		return c, func() { c.cancel(false, Canceled) }
 	}
@@ -416,6 +423,7 @@ func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
 	defer c.mu.Unlock()
 	if c.err == nil {
 		c.timer = time.AfterFunc(dur, func() {
+			// d 时间后，timer 会自动调用 cancel 函数。自动取消
 			c.cancel(true, DeadlineExceeded)
 		})
 	}
