@@ -64,6 +64,7 @@ type Context interface {
 	// Deadline returns the time when work done on behalf of this context
 	// should be canceled. Deadline returns ok==false when no deadline is
 	// set. Successive calls to Deadline return the same results.
+	// 返回 context 是否会被取消以及自动取消时间（即 deadline）
 	Deadline() (deadline time.Time, ok bool)
 
 	// Done returns a channel that's closed when work done on behalf of this
@@ -103,6 +104,7 @@ type Context interface {
 	// Canceled if the context was canceled
 	// or DeadlineExceeded if the context's deadline passed.
 	// After Err returns a non-nil error, successive calls to Err return the same error.
+	// 在 channel Done 关闭后，返回 context 取消原因
 	Err() error
 
 	// Value returns the value associated with this context for key, or nil
@@ -150,6 +152,7 @@ type Context interface {
 	// 		u, ok := ctx.Value(userKey).(*User)
 	// 		return u, ok
 	// 	}
+	// 获取 key 对应的 value
 	Value(key interface{}) interface{}
 }
 
@@ -235,6 +238,7 @@ type CancelFunc func()
 func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
 	c := newCancelCtx(parent)
 	propagateCancel(parent, &c)
+	//子节点取消的时候会断掉关系
 	return &c, func() { c.cancel(true, Canceled) }
 }
 
@@ -245,13 +249,16 @@ func newCancelCtx(parent Context) cancelCtx {
 
 // propagateCancel arranges for child to be canceled when parent is.
 func propagateCancel(parent Context, child canceler) {
+	// 父节点是个空节点(根节点 backGround，todo都是空节点)
 	if parent.Done() == nil {
 		return // parent is never canceled
 	}
+	// 找到可以取消的父 context
 	if p, ok := parentCancelCtx(parent); ok {
 		p.mu.Lock()
 		if p.err != nil {
 			// parent has already been canceled
+			//parent 已经被canceled
 			child.cancel(false, p.err)
 		} else {
 			if p.children == nil {
@@ -261,9 +268,11 @@ func propagateCancel(parent Context, child canceler) {
 		}
 		p.mu.Unlock()
 	} else {
+		// 如果没有找到可取消的父 context。新启动一个协程监控父节点或子节点取消信号
 		go func() {
 			select {
 			case <-parent.Done():
+				//父节点关闭不断掉关系
 				child.cancel(false, parent.Err())
 			case <-child.Done():
 			}
@@ -290,6 +299,7 @@ func parentCancelCtx(parent Context) (*cancelCtx, bool) {
 }
 
 // removeChild removes a context from its parent.
+//删除子节点
 func removeChild(parent Context, child canceler) {
 	p, ok := parentCancelCtx(parent)
 	if !ok {
@@ -297,6 +307,7 @@ func removeChild(parent Context, child canceler) {
 	}
 	p.mu.Lock()
 	if p.children != nil {
+		//删除children
 		delete(p.children, child)
 	}
 	p.mu.Unlock()
@@ -318,6 +329,7 @@ func init() {
 
 // A cancelCtx can be canceled. When canceled, it also cancels any children
 // that implement canceler.
+//可以取消的cancelCtx,实现了canceler接口
 type cancelCtx struct {
 	Context
 
@@ -362,12 +374,14 @@ func (c *cancelCtx) String() string {
 // cancel closes c.done, cancels each of c's children, and, if
 // removeFromParent is true, removes c from its parent's children.
 func (c *cancelCtx) cancel(removeFromParent bool, err error) {
+	// 必须要传 err
 	if err == nil {
 		panic("context: internal error: missing cancel error")
 	}
 	c.mu.Lock()
 	if c.err != nil {
 		c.mu.Unlock()
+		// already canceled 已经被其他协程取消
 		return // already canceled
 	}
 	c.err = err
@@ -376,14 +390,17 @@ func (c *cancelCtx) cancel(removeFromParent bool, err error) {
 	} else {
 		close(c.done)
 	}
+	// 遍历它的所有子节点
 	for child := range c.children {
 		// NOTE: acquiring the child's lock while holding parent's lock.
+		// 递归地取消所有子节点
 		child.cancel(false, err)
 	}
 	c.children = nil
 	c.mu.Unlock()
 
 	if removeFromParent {
+		// 从父节点中移除自己
 		removeChild(c.Context, c)
 	}
 }
@@ -451,13 +468,16 @@ func (c *timerCtx) String() string {
 }
 
 func (c *timerCtx) cancel(removeFromParent bool, err error) {
+	// 直接调用 cancelCtx 的取消方法
 	c.cancelCtx.cancel(false, err)
 	if removeFromParent {
 		// Remove this timerCtx from its parent cancelCtx's children.
+		// 从父节点中删除子节点
 		removeChild(c.cancelCtx.Context, c)
 	}
 	c.mu.Lock()
 	if c.timer != nil {
+		// 关掉定时器，这样，在deadline 到来时，不会再次取消
 		c.timer.Stop()
 		c.timer = nil
 	}
