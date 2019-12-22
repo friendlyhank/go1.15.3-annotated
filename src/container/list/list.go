@@ -28,6 +28,7 @@ type Element struct {
 }
 
 // Next returns the next list element or nil.
+//返回链表的下一个元素,如果没有则返回nil
 func (e *Element) Next() *Element {
 	if p := e.next; e.list != nil && p != &e.list.root {
 		return p
@@ -36,6 +37,7 @@ func (e *Element) Next() *Element {
 }
 
 // Prev returns the previous list element or nil.
+//返回链表的上一个元素,如果没有则返回nil
 func (e *Element) Prev() *Element {
 	if p := e.prev; e.list != nil && p != &e.list.root {
 		return p
