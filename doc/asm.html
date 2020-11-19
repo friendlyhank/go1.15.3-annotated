@@ -437,6 +437,31 @@ This is a wrapper function and should not count as disabling <code>recover</code
 (For <code>TEXT</code> items.)
 This function is a closure so it uses its incoming context register.
 </li>
+<li>
+<code>LOCAL</code> = 128
+<br>
+This symbol is local to the dynamic shared object.
+</li>
+<li>
+<code>TLSBSS</code> = 256
+<br>
+(For <code>DATA</code> and <code>GLOBL</code> items.)
+Put this data in thread local storage.
+</li>
+<li>
+<code>NOFRAME</code> = 512
+<br>
+(For <code>TEXT</code> items.)
+Do not insert instructions to allocate a stack frame and save/restore the return
+address, even if this is not a leaf function.
+Only valid on functions that declare a frame size of 0.
+</li>
+<li>
+<code>TOPFRAME</code> = 2048
+<br>
+(For <code>TEXT</code> items.)
+Function is the top of the call stack. Traceback should stop at this function.
+</li>
 </ul>
 
 <h3 id="runtime">Runtime Coordination</h3>
@@ -590,26 +615,36 @@ Here follow some descriptions of key Go-specific details for the supported archi
 <p>
 The runtime pointer to the <code>g</code> structure is maintained
 through the value of an otherwise unused (as far as Go is concerned) register in the MMU.
-A OS-dependent macro <code>get_tls</code> is defined for the assembler if the source includes
-a special header, <code>go_asm.h</code>:
+An OS-dependent macro <code>get_tls</code> is defined for the assembler if the source is
+in the <code>runtime</code> package and includes a special header, <code>go_tls.h</code>:
 </p>
 
 <pre>
-#include "go_asm.h"
+#include "go_tls.h"
 </pre>
 
 <p>
 Within the runtime, the <code>get_tls</code> macro loads its argument register
 with a pointer to the <code>g</code> pointer, and the <code>g</code> struct
 contains the <code>m</code> pointer.
+There's another special header containing the offsets for each
+element of <code>g</code>, called <code>go_asm.h</code>.
 The sequence to load <code>g</code> and <code>m</code> using <code>CX</code> looks like this:
 </p>
 
 <pre>
+#include "go_tls.h"
+#include "go_asm.h"
+...
 get_tls(CX)
 MOVL	g(CX), AX     // Move g into AX.
 MOVL	g_m(AX), BX   // Move g.m into BX.
 </pre>
+
+<p>
+Note: The code above works only in the <code>runtime</code> package, while <code>go_tls.h</code> also
+applies to <a href="#arm">arm</a>, <a href="#amd64">amd64</a> and amd64p32, and <code>go_asm.h</code> applies to all architectures.
+</p>
 
 <p>
 Addressing modes:
@@ -822,26 +857,15 @@ The other extensions include <code>SXTH</code> (16-bit), <code>SXTW</code> (32-b
 Reference: <a href="/pkg/cmd/internal/obj/arm64">Go ARM64 Assembly Instructions Reference Manual</a>
 </p>
 
-<h3 id="ppc64">64-bit PowerPC, a.k.a. ppc64</h3>
+<h3 id="ppc64">PPC64</h3>
 
 <p>
-The 64-bit PowerPC port is in an experimental state.
+This assembler is used by GOARCH values ppc64 and ppc64le.
 </p>
 
 <p>
-Addressing modes:
+Reference: <a href="/pkg/cmd/internal/obj/ppc64">Go PPC64 Assembly Instructions Reference Manual</a>
 </p>
-
-<ul>
-
-<li>
-<code>(R5)(R6*1)</code>: The location at <code>R5</code> plus <code>R6</code>. It is a scaled
-mode as on the x86, but the only scale allowed is <code>1</code>.
-</li>
-
-<li>
-<code>(R5+R6)</code>: Alias for (R5)(R6*1)
-</li>
 
 </ul>
 

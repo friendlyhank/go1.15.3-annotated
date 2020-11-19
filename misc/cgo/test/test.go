@@ -115,6 +115,44 @@ int add(int x, int y) {
 	return x+y;
 };
 
+// Following mimicks vulkan complex definitions for benchmarking cgocheck overhead.
+
+typedef uint32_t VkFlags;
+typedef VkFlags  VkDeviceQueueCreateFlags;
+typedef uint32_t VkStructureType;
+
+typedef struct VkDeviceQueueCreateInfo {
+    VkStructureType             sType;
+    const void*                 pNext;
+    VkDeviceQueueCreateFlags    flags;
+    uint32_t                    queueFamilyIndex;
+    uint32_t                    queueCount;
+    const float*                pQueuePriorities;
+} VkDeviceQueueCreateInfo;
+
+typedef struct VkPhysicalDeviceFeatures {
+    uint32_t bools[56];
+} VkPhysicalDeviceFeatures;
+
+typedef struct VkDeviceCreateInfo {
+    VkStructureType                    sType;
+    const void*                        pNext;
+    VkFlags                            flags;
+    uint32_t                           queueCreateInfoCount;
+    const VkDeviceQueueCreateInfo*     pQueueCreateInfos;
+    uint32_t                           enabledLayerCount;
+    const char* const*                 ppEnabledLayerNames;
+    uint32_t                           enabledExtensionCount;
+    const char* const*                 ppEnabledExtensionNames;
+    const VkPhysicalDeviceFeatures*    pEnabledFeatures;
+} VkDeviceCreateInfo;
+
+void handleComplexPointer(VkDeviceCreateInfo *a0) {}
+void handleComplexPointer8(
+	VkDeviceCreateInfo *a0, VkDeviceCreateInfo *a1, VkDeviceCreateInfo *a2, VkDeviceCreateInfo *a3,
+	VkDeviceCreateInfo *a4, VkDeviceCreateInfo *a5, VkDeviceCreateInfo *a6, VkDeviceCreateInfo *a7
+) {}
+
 // complex alignment
 
 struct {
@@ -524,6 +562,11 @@ void issue8811Execute() {
 		issue8811Init();
 }
 
+// issue 8945
+
+typedef void (*PFunc8945)();
+PFunc8945 func8945;
+
 // issue 9557
 
 struct issue9557_t {
@@ -854,6 +897,16 @@ static uint16_t issue31093F(uint16_t v) { return v; }
 
 // issue 32579
 typedef struct S32579 { unsigned char data[1]; } S32579;
+
+// issue 38649
+// Test that #define'd type aliases work.
+#define netbsd_gid unsigned int
+
+// issue 40494
+// Inconsistent handling of tagged enum and union types.
+enum Enum40494 { X_40494 };
+union Union40494 { int x; };
+void issue40494(enum Enum40494 e, union Union40494* up) {}
 */
 import "C"
 
@@ -993,10 +1046,55 @@ type Context struct {
 }
 
 func benchCgoCall(b *testing.B) {
-	const x = C.int(2)
-	const y = C.int(3)
+	b.Run("add-int", func(b *testing.B) {
+		const x = C.int(2)
+		const y = C.int(3)
+
+		for i := 0; i < b.N; i++ {
+			C.add(x, y)
+		}
+	})
+
+	b.Run("one-pointer", func(b *testing.B) {
+		var a0 C.VkDeviceCreateInfo
+		for i := 0; i < b.N; i++ {
+			C.handleComplexPointer(&a0)
+		}
+	})
+	b.Run("eight-pointers", func(b *testing.B) {
+		var a0, a1, a2, a3, a4, a5, a6, a7 C.VkDeviceCreateInfo
+		for i := 0; i < b.N; i++ {
+			C.handleComplexPointer8(&a0, &a1, &a2, &a3, &a4, &a5, &a6, &a7)
+		}
+	})
+	b.Run("eight-pointers-nil", func(b *testing.B) {
+		var a0, a1, a2, a3, a4, a5, a6, a7 *C.VkDeviceCreateInfo
+		for i := 0; i < b.N; i++ {
+			C.handleComplexPointer8(a0, a1, a2, a3, a4, a5, a6, a7)
+		}
+	})
+	b.Run("eight-pointers-array", func(b *testing.B) {
+		var a [8]C.VkDeviceCreateInfo
+		for i := 0; i < b.N; i++ {
+			C.handleComplexPointer8(&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &a[6], &a[7])
+		}
+	})
+	b.Run("eight-pointers-slice", func(b *testing.B) {
+		a := make([]C.VkDeviceCreateInfo, 8)
+		for i := 0; i < b.N; i++ {
+			C.handleComplexPointer8(&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &a[6], &a[7])
+		}
+	})
+}
+
+// Benchmark measuring overhead from Go to C and back to Go (via a callback)
+func benchCallback(b *testing.B) {
+	var x = false
 	for i := 0; i < b.N; i++ {
-		C.add(x, y)
+		nestedCall(func() { x = true })
+	}
+	if !x {
+		b.Fatal("nestedCall was not invoked")
 	}
 }
 
@@ -1950,11 +2048,20 @@ func test27660(t *testing.T) {
 			// increase the likelihood that the race described in #27660
 			// results in corruption of ThreadSanitizer's internal state
 			// and thus an assertion failure or segfault.
+			i := 0
 			for ctx.Err() == nil {
 				j := rand.Intn(100)
 				locks[j].Lock()
 				ints[j]++
 				locks[j].Unlock()
+				// needed for gccgo, to avoid creation of an
+				// unpreemptible "fast path" in this loop. Choice
+				// of (1<<24) is somewhat arbitrary.
+				if i%(1<<24) == 0 {
+					runtime.Gosched()
+				}
+				i++
+
 			}
 		}()
 		time.Sleep(time.Millisecond)
@@ -2094,4 +2201,19 @@ func test32579(t *testing.T) {
 	if s[0].data[0] != 1 {
 		t.Errorf("&s[0].data[0] failed: got %d, want %d", s[0].data[0], 1)
 	}
+}
+
+// issue 38649
+
+var issue38649 C.netbsd_gid = 42
+
+// issue 39877
+
+var issue39877 *C.void = nil
+
+// issue 40494
+// No runtime test; just make sure it compiles.
+
+func Issue40494() {
+	C.issue40494(C.enum_Enum40494(C.X_40494), (*C.union_Union40494)(nil))
 }

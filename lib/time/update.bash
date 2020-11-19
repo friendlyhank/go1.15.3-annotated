@@ -8,8 +8,8 @@
 # Consult https://www.iana.org/time-zones for the latest versions.
 
 # Versions to use.
-CODE=2019b
-DATA=2019b
+CODE=2020a
+DATA=2020a
 
 set -e
 rm -rf work
@@ -27,6 +27,8 @@ cd zoneinfo
 rm -f ../../zoneinfo.zip
 zip -0 -r ../../zoneinfo.zip *
 cd ../..
+
+go generate time/tzdata
 
 echo
 if [ "$1" = "-work" ]; then
