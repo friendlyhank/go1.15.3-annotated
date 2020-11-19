@@ -9,6 +9,8 @@ type _type struct {
 
 }
 
+type typeOff int32
+
 type imethod struct{}
 
 type interfacetype struct{}
