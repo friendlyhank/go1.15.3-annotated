@@ -70,7 +70,14 @@ var modinfo string
 // sloppy about thread unparking when submitting to global queue. Also see comments
 // for nmspinning manipulation.
 
-//var(
-//	m0 m
-//	g0 g
-//)
+// The bootstrap sequence is:
+//
+//	call osinit
+//	call schedinit
+//	make & queue new G
+//	call runtime·mstart
+//
+// The new G calls runtime·main.
+func schedinit() {
+	println("come in")
+}
