@@ -100,6 +100,7 @@ type g struct{
 	stackguard1 uintptr // offset known to liblink
 
 	m *m // current m; offset known to arm liblink
+	sched gobuf //用于保存执行现场
 }
 
 type m struct{
