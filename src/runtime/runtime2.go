@@ -55,7 +55,9 @@ type eface struct{
 // so I can't see them ever moving. If we did want to start moving data
 // in the GC, we'd need to allocate the goroutine structs from an
 // alternate arena. Using guintptr doesn't make that problem any worse.
-type guintptr uintptr
+type guintptr uintptr//g链表
+
+type puintptr uintptr
 
 type gobuf struct{
 	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
@@ -104,8 +106,20 @@ type g struct{
 }
 
 type m struct{
-	g0 *g
+	g0 *g //提供系统栈空间
+	morebuf gobuf //gobuf arg to morestack
+
+	gsignal *g
 	tls [6]uintptr // thread-local storage (for x86 extern register)
+	curg *g //当前运行的goroutine current running goroutine
+	p puintptr //绑定的p
+}
+
+type p struct{
+	// wbBuf is this P's GC write barrier buffer.
+	//
+	// TODO: Consider caching this in the running G.
+	wbBuf wbBuf
 }
 
 type itab struct {
