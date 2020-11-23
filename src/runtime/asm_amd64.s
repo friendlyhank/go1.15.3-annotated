@@ -84,7 +84,6 @@ GLOBL _rt0_amd64_lib_argc<>(SB),NOPTR, $8
 DATA _rt0_amd64_lib_argv<>(SB)/8, $0
 GLOBL _rt0_amd64_lib_argv<>(SB),NOPTR, $8
 
-//rt0_go main各种初始化入口
 TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
@@ -153,7 +152,7 @@ nocpuinfo:
 #endif
 	CALL	AX
 
-	// update stackguard after _cgo_init 分配g0的栈空间信息
+	// update stackguard after _cgo_init
 	MOVQ	$runtime·g0(SB), CX
 	MOVQ	(g_stack+stack_lo)(CX), AX
 	ADDQ	$const__StackGuard, AX
@@ -198,7 +197,6 @@ ok:
 	MOVQ	CX, g(BX)
 	LEAQ	runtime·m0(SB), AX
 
-    //m0和g0互相绑定
 	// save m->g0 = g0
 	MOVQ	CX, m_g0(AX)
 	// save m0 to g0->m
@@ -211,11 +209,10 @@ ok:
 	MOVL	AX, 0(SP)
 	MOVQ	24(SP), AX		// copy argv
 	MOVQ	AX, 8(SP)
-	CALL	runtime·args(SB) //初始化基础参数信息
+	CALL	runtime·args(SB)
 	CALL	runtime·osinit(SB)
-	CALL	runtime·schedinit(SB) //初始化调度器
+	CALL	runtime·schedinit(SB)
 
-    //创建main goroutine用于执行runtime.main
 	// create a new goroutine to start program
 	MOVQ	$runtime·mainPC(SB), AX		// entry
 	PUSHQ	AX
@@ -224,7 +221,7 @@ ok:
 	POPQ	AX
 	POPQ	AX
 
-	// start this M 启动m
+	// start this M
 	CALL	runtime·mstart(SB)
 
 	CALL	runtime·abort(SB)	// mstart should never return
@@ -235,8 +232,6 @@ ok:
 	MOVQ	$runtime·debugCallV1(SB), AX
 	RET
 
-
-//runtime·mainPC对应的runtime.main
 DATA	runtime·mainPC+0(SB)/8,$runtime·main(SB)
 GLOBL	runtime·mainPC(SB),RODATA,$8
 
@@ -251,9 +246,9 @@ TEXT runtime·asminit(SB),NOSPLIT,$0-0
 /*
  *  go-routine
  */
+
 // func gosave(buf *gobuf)
 // save state in Gobuf; setjmp
-//保存执行现场
 TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	buf+0(FP), AX		// gobuf
 	LEAQ	buf+0(FP), BX		// caller's SP
