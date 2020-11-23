@@ -98,7 +98,7 @@ const iota = 0 // Untyped int.
 
 // nil is a predeclared identifier representing the zero value for a
 // pointer, channel, func, interface, map, or slice type.
-var nil Type // Type must be a pointer, channel, func, interface, map, or slice type
+var nil Type // Type must be a pointer, channel, func, interface, map, or slice type 必须指针类型,例如channel,func,interface,map,slice
 
 // Type is here for the purposes of documentation only. It is a stand-in
 // for any Go type, but represents the same type for any given function
@@ -155,7 +155,7 @@ func delete(m map[Type]Type1, key Type)
 // For some arguments, such as a string literal or a simple array expression, the
 // result can be a constant. See the Go language specification's "Length and
 // capacity" section for details.
-func len(v Type) int
+func len(v Type) int //计算长度 Array,Slice,String,Channel
 
 // The cap built-in function returns the capacity of v, according to its type:
 //	Array: the number of elements in v (same as len(v)).
